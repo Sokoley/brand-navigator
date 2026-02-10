@@ -1,65 +1,90 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import { useState, useEffect } from 'react';
+import { Product, CustomProperties } from '@/lib/types';
+import SearchBar from '@/components/SearchBar';
+import ProductCard from '@/components/ProductCard';
+import CategorySection from '@/components/CategorySection';
+
+export default function HomePage() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [searchResults, setSearchResults] = useState<Product[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [categories, setCategories] = useState<Array<{ name: string; subcategories: string[] }>>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/yandex/products').then((r) => r.json()),
+      fetch('/api/properties').then((r) => r.json()),
+    ]).then(([productsData, propertiesData]) => {
+      const productsList = Object.values(productsData) as Product[];
+      setProducts(productsList);
+
+      const props = propertiesData as CustomProperties;
+      const cats = (props['Категория'] as string[]) || [];
+      const subcats = (props['Подкатегория'] as Record<string, string[]>) || {};
+
+      setCategories(
+        cats.map((cat) => ({
+          name: cat,
+          subcategories: subcats[cat] || [],
+        }))
+      );
+
+      setLoading(false);
+    });
+  }, []);
+
+  const handleSearch = (results: Product[], query: string) => {
+    setSearchResults(results);
+    setSearchQuery(query);
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+    <>
+      <div className="block mx-auto mt-20 md:mt-[140px] mb-8 md:mb-[50px] text-2xl sm:text-4xl md:text-[55px] font-bold text-center px-4">
+        Бренд-навигатор
+      </div>
+
+      <div className="max-w-[1440px] mx-auto px-4 md:px-8 pt-6 md:pt-10">
+        {loading ? (
+          <div className="text-center text-gray-500 py-20">Загрузка...</div>
+        ) : (
+          <>
+            <SearchBar products={products} onSearch={handleSearch} />
+
+            {searchQuery && (
+              <div className="mt-8">
+                <div className="text-sm text-gray-500 mb-5">
+                  Найдено товаров: {searchResults.length} по запросу &quot;{searchQuery}&quot;
+                </div>
+
+                {searchResults.length === 0 ? (
+                  <div className="text-center py-16 text-gray-500">
+                    <h3 className="text-dark mb-2">Товары не найдены</h3>
+                    <p className="text-sm">Попробуйте изменить поисковый запрос или проверить написание</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4 md:gap-5">
+                    {searchResults.map((product) => (
+                      <ProductCard
+                        key={product.name}
+                        product={product}
+                        searchQuery={searchQuery}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {!searchQuery && categories.length > 0 && (
+        <CategorySection categories={categories} />
+      )}
+    </>
   );
 }

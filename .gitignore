@@ -32,6 +32,14 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+
+# data files (server-specific)
+products_cache.json
+custom_properties.json
+
+# backups
+_backup_php/
 
 # vercel
 .vercel
