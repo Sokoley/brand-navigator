@@ -174,21 +174,54 @@ export default function PointsAdminPage() {
     }
   }, [notification]);
 
-  // Filter points by search query
+  // Filter and sort points by search query
   const searchFilteredPoints = useMemo(() => {
-    return points?.features.filter((point) => {
-      if (!point || !point.properties) return false;
-      const query = searchQuery.toLowerCase();
-      const header = point.properties?.balloonContentHeader || '';
-      const adress = point.properties?.adress || '';
-      const footer = point.properties?.balloonContentFooter || '';
-      return (
-        header.toLowerCase().includes(query) ||
-        adress.toLowerCase().includes(query) ||
-        footer.toLowerCase().includes(query) ||
-        (point.id?.toString() || '').includes(query)
-      );
-    }) || [];
+    if (!points?.features) return [];
+
+    const query = searchQuery.toLowerCase().trim();
+
+    // If no search query, return all points sorted by ID
+    if (!query) {
+      return [...points.features].sort((a, b) => a.id - b.id);
+    }
+
+    // Filter and calculate relevance score
+    const scored = points.features
+      .map((point) => {
+        if (!point || !point.properties) return null;
+
+        const header = (point.properties?.balloonContentHeader || '').toLowerCase();
+        const adress = (point.properties?.adress || '').toLowerCase();
+        const footer = (point.properties?.balloonContentFooter || '').toLowerCase();
+        const idStr = point.id?.toString() || '';
+
+        // Calculate relevance score (higher = more relevant)
+        let score = 0;
+
+        if (header === query) {
+          score = 100; // Exact match in name
+        } else if (header.startsWith(query)) {
+          score = 80; // Name starts with query
+        } else if (header.includes(query)) {
+          score = 60; // Name contains query
+        } else if (adress.startsWith(query)) {
+          score = 40; // Address starts with query
+        } else if (adress.includes(query) || footer.includes(query)) {
+          score = 20; // Address/footer contains query
+        } else if (idStr.includes(query)) {
+          score = 10; // ID contains query
+        }
+
+        if (score === 0) return null;
+
+        return { point, score };
+      })
+      .filter((item): item is { point: MapPoint; score: number } => item !== null);
+
+    // Sort by score (descending), then by ID
+    return scored
+      .sort((a, b) => b.score - a.score || a.point.id - b.point.id)
+      .map((item) => item.point);
   }, [points, searchQuery]);
 
   // Start editing
