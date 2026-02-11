@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.simple
+      args:
+        - NEXT_PUBLIC_YANDEX_MAPS_API_KEY=${NEXT_PUBLIC_YANDEX_MAPS_API_KEY}
     container_name: storage-app
     restart: unless-stopped
     ports:

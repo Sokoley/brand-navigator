@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
+import { uploadFileViaFTP } from '@/lib/ftp';
 
 // Point type mapping
 const POINT_TYPE_MAP: Record<string, string> = {
@@ -7,6 +8,32 @@ const POINT_TYPE_MAP: Record<string, string> = {
   'официальная точка продаж': 'islands#redDotIcon',
   'дилер': 'islands#blueDotIcon',
 };
+
+const DATA_URL = 'https://smazka.ru/data_test.json';
+
+interface MapPoint {
+  type: 'Feature';
+  id: number;
+  geometry: {
+    type: 'Point';
+    coordinates: [number, number];
+  };
+  properties: {
+    balloonContentHeader: string;
+    balloonContent: string;
+    balloonContentFooter: string;
+    hintContent: string;
+    adress: string;
+  };
+  options: {
+    preset: string;
+  };
+}
+
+interface PointsCollection {
+  type: 'FeatureCollection';
+  features: MapPoint[];
+}
 
 function parseCoordinates(coordString: string): { latitude: number; longitude: number } | null {
   if (!coordString) return null;
@@ -104,24 +131,47 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Add points via the main API
-    const addedPoints = [];
-    for (const point of points) {
-      try {
-        const res = await fetch(new URL('/api/points', request.url), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(point),
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          addedPoints.push(data.point);
-        }
-      } catch {
-        // Continue with next point
-      }
+    // Fetch current points data
+    const response = await fetch(DATA_URL, { cache: 'no-store' });
+    if (!response.ok) {
+      return NextResponse.json({ error: 'Не удалось загрузить текущие данные' }, { status: 500 });
     }
+    const data: PointsCollection = await response.json();
+
+    // Find max ID
+    let maxId = Math.max(...data.features.map((f) => f.id), 0);
+
+    // Add points directly
+    const addedPoints: MapPoint[] = [];
+    for (const point of points) {
+      maxId++;
+      const newPoint: MapPoint = {
+        type: 'Feature',
+        id: maxId,
+        geometry: {
+          type: 'Point',
+          coordinates: [point.latitude, point.longitude],
+        },
+        properties: {
+          balloonContentHeader: point.name,
+          balloonContent: `Телефон: ${point.phone || 'нет'}<br>Email: ${point.email || 'нет'}<br>Сайт: ${
+            point.website ? `<a target='_blank' href='${point.website}'>${point.website}</a>` : 'нет'
+          }`,
+          balloonContentFooter: point.address,
+          hintContent: point.name,
+          adress: point.address,
+        },
+        options: {
+          preset: point.preset,
+        },
+      };
+      data.features.push(newPoint);
+      addedPoints.push(newPoint);
+    }
+
+    // Save to remote server via FTP
+    const jsonContent = JSON.stringify(data, null, 2);
+    await uploadFileViaFTP(jsonContent);
 
     return NextResponse.json({
       success: true,

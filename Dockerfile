@@ -18,6 +18,10 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ARG JWT_SECRET=build_time_dummy_secret_32_chars_min
 ENV JWT_SECRET=$JWT_SECRET
 
+# Yandex Maps API key (must be set during build for client-side usage)
+ARG NEXT_PUBLIC_YANDEX_MAPS_API_KEY
+ENV NEXT_PUBLIC_YANDEX_MAPS_API_KEY=$NEXT_PUBLIC_YANDEX_MAPS_API_KEY
+
 RUN npm run build
 
 # Stage 3: Runner
