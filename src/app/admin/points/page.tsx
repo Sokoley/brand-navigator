@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '@/components/AuthProvider';
-import YandexMap, { MapBounds } from '@/components/YandexMap';
+import YandexMap from '@/components/YandexMap';
 
 interface MapPoint {
   type: 'Feature';
@@ -103,13 +103,8 @@ export default function PointsAdminPage() {
     preset: 'islands#grayDotIcon',
   });
   const [isSaving, setIsSaving] = useState(false);
-  const [mapBounds, setMapBounds] = useState<MapBounds | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleBoundsChange = useCallback((bounds: MapBounds) => {
-    setMapBounds(bounds);
-  }, []);
 
   // Download Excel template
   const handleDownloadTemplate = () => {
@@ -159,24 +154,6 @@ export default function PointsAdminPage() {
     }
   };
 
-  // Check if point is within bounds
-  const isPointInBounds = useCallback((point: MapPoint, bounds: MapBounds | null): boolean => {
-    if (!bounds) return true;
-    const coords = point.geometry?.coordinates;
-    if (!coords || coords.length < 2) return false;
-    const lat = coords[0];
-    const lng = coords[1];
-    if (typeof lat !== 'number' || typeof lng !== 'number') return false;
-
-    const inBounds = (
-      lat >= bounds.southWest[0] &&
-      lat <= bounds.northEast[0] &&
-      lng >= bounds.southWest[1] &&
-      lng <= bounds.northEast[1]
-    );
-    return inBounds;
-  }, []);
-
   // Load points
   useEffect(() => {
     if (isAuth) {
@@ -213,12 +190,6 @@ export default function PointsAdminPage() {
       );
     }) || [];
   }, [points, searchQuery]);
-
-  // Filter points by map bounds (for table display)
-  const filteredPoints = useMemo(() => {
-    if (!mapBounds) return [];
-    return searchFilteredPoints.filter((point) => isPointInBounds(point, mapBounds));
-  }, [searchFilteredPoints, mapBounds, isPointInBounds]);
 
   // Start editing
   const handleEdit = (point: MapPoint) => {
@@ -420,15 +391,8 @@ export default function PointsAdminPage() {
         </div>
       )}
 
-      {/* Search and Add */}
+      {/* Add Button and Excel Import/Export */}
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
-        <input
-          type="text"
-          placeholder="Поиск по названию, адресу или ID..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="flex-1 px-4 py-2 border border-[#dee2e6] rounded focus:outline-none focus:border-[#9DA1A8]"
-        />
         <button
           onClick={() => {
             setIsAddingNew(true);
@@ -464,13 +428,7 @@ export default function PointsAdminPage() {
 
       {/* Stats */}
       <p className="text-[#9DA1A8] mb-4">
-        Всего точек: {points?.features.length || 0} | В области карты: {filteredPoints.length}
-        {mapBounds && (
-          <span className="ml-2 text-xs">
-            (SW: {mapBounds.southWest[0].toFixed(2)}, {mapBounds.southWest[1].toFixed(2)} |
-            NE: {mapBounds.northEast[0].toFixed(2)}, {mapBounds.northEast[1].toFixed(2)})
-          </span>
-        )}
+        Всего точек: {points?.features.length || 0}
       </p>
 
       {/* Map */}
@@ -479,7 +437,6 @@ export default function PointsAdminPage() {
           <YandexMap
             points={searchFilteredPoints}
             onPointClick={handleEdit}
-            onBoundsChange={handleBoundsChange}
             className="w-full h-[400px] rounded-lg border border-[#dee2e6]"
           />
           <div className="flex flex-wrap items-center gap-4 mt-2">
@@ -500,6 +457,22 @@ export default function PointsAdminPage() {
           </div>
         </div>
       )}
+
+      {/* Search */}
+      <div className="mb-6">
+        <input
+          type="text"
+          placeholder="Поиск по названию, адресу или ID..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full px-4 py-2 border border-[#dee2e6] rounded focus:outline-none focus:border-[#9DA1A8]"
+        />
+        {searchQuery && (
+          <p className="text-sm text-[#9DA1A8] mt-2">
+            Найдено: {searchFilteredPoints.length} из {points?.features.length || 0}
+          </p>
+        )}
+      </div>
 
       {/* Add/Edit Form */}
       {(isAddingNew || editingPoint) && (
@@ -654,7 +627,7 @@ export default function PointsAdminPage() {
             </tr>
           </thead>
           <tbody>
-            {filteredPoints.map((point) => (
+            {searchFilteredPoints.map((point) => (
               <tr
                 key={point.id}
                 className={`hover:bg-gray-50 ${editingPoint?.id === point.id ? 'bg-yellow-50' : ''}`}
@@ -696,9 +669,9 @@ export default function PointsAdminPage() {
           </tbody>
         </table>
 
-        {filteredPoints.length === 0 && (
+        {searchFilteredPoints.length === 0 && (
           <p className="text-center text-[#9DA1A8] py-8">
-            {searchQuery ? 'Ничего не найдено' : 'Загрузка точек...'}
+            {searchQuery ? 'Ничего не найдено' : (points ? 'Нет точек' : 'Загрузка точек...')}
           </p>
         )}
       </div>

@@ -90,7 +90,7 @@ export default function YandexMap({ points, onPointClick, onBoundsChange, classN
     mapInstanceRef.current = new ymaps.Map(mapContainerRef.current, {
       center: defaultCenter,
       zoom: defaultZoom,
-      controls: ['zoomControl', 'fullscreenControl', 'geolocationControl', 'searchControl'],
+      controls: ['zoomControl', 'fullscreenControl', 'geolocationControl'],
     });
 
     // Create ObjectManager without clustering
