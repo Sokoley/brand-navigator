@@ -62,6 +62,24 @@ export default function ProductsPage() {
       </div>
 
       <div className="max-w-[1440px] mx-auto px-4 md:px-8">
+        <div className="flex flex-wrap justify-center gap-4 mb-8">
+          <a
+            href="https://disk.yandex.ru/d/Gibn8WMao0CGmA"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-6 py-3 bg-[#007bff] text-white rounded-lg font-medium hover:bg-[#0056b3] transition-colors"
+          >
+            Логотипы
+          </a>
+          <a
+            href="https://smazka.ru/catalog-2025/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-6 py-3 bg-[#28a745] text-white rounded-lg font-medium hover:bg-[#218838] transition-colors"
+          >
+            Каталог
+          </a>
+        </div>
         {alert && (
           <Alert type={alert.type} message={alert.message} />
         )}
