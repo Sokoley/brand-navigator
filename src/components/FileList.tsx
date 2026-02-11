@@ -1,7 +1,7 @@
 'use client';
 
 import { YandexDiskItem } from '@/lib/types';
-import { formatFileSize, formatDate, getPreviewProxyUrl } from '@/lib/utils';
+import { formatFileSize, formatDate, getPreviewProxyUrl, getDownloadProxyUrl } from '@/lib/utils';
 
 export default function FileList({
   files,
@@ -55,8 +55,7 @@ export default function FileList({
               {file.file && (
                 <a
                   className="no-underline text-base text-black p-2 rounded-md hover:bg-gray-100 transition-colors"
-                  href={file.file}
-                  download={file.name}
+                  href={getDownloadProxyUrl(file.file, file.name)}
                   onClick={(e) => e.stopPropagation()}
                   title="Скачать"
                 >

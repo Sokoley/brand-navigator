@@ -41,6 +41,11 @@ export function getPreviewProxyUrl(previewUrl: string, size: string = 'XXXL'): s
   return '/api/preview?url=' + encodeURIComponent(url);
 }
 
+export function getDownloadProxyUrl(fileUrl: string, filename: string): string {
+  if (!fileUrl) return '';
+  return '/api/download?url=' + encodeURIComponent(fileUrl) + '&filename=' + encodeURIComponent(filename);
+}
+
 export const PROPERTY_DISPLAY_ORDER = [
   'Тип контента',
   'Категория',

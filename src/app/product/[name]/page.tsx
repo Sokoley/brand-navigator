@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { YandexDiskItem } from '@/lib/types';
-import { getPreviewProxyUrl, formatFileSize, formatDate, PROPERTY_COLORS, PROPERTY_DISPLAY_ORDER } from '@/lib/utils';
+import { getPreviewProxyUrl, getDownloadProxyUrl, formatFileSize, formatDate, PROPERTY_COLORS, PROPERTY_DISPLAY_ORDER } from '@/lib/utils';
 import { useAuth } from '@/components/AuthProvider';
 import { uploadFilesWithProgress } from '@/lib/upload-files';
 import FilePreview from '@/components/FilePreview';
@@ -287,7 +287,7 @@ export default function ProductDetailPage({ params }: { params: { name: string }
         for (const file of pngFiles) {
           try {
             if (file.file) {
-              const response = await fetch(file.file);
+              const response = await fetch(getDownloadProxyUrl(file.file, file.name));
               const blob = await response.blob();
               zip.file(file.name, blob);
             }
@@ -828,8 +828,7 @@ export default function ProductDetailPage({ params }: { params: { name: string }
                         {file.file && (
                           <a
                             className="no-underline text-base text-black p-2 rounded-md hover:bg-gray-100"
-                            href={file.file}
-                            download={file.name}
+                            href={getDownloadProxyUrl(file.file, file.name)}
                             onClick={(e) => e.stopPropagation()}
                             title="Скачать"
                           >
