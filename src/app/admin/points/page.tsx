@@ -475,7 +475,7 @@ export default function PointsAdminPage() {
       {/* Stats */}
       <p className="text-[#9DA1A8] mb-4">
         Всего точек: {points?.features.length || 0} (уникальных: {searchFilteredPoints.length || 0})
-        <span className="text-xs ml-2">[v2]</span>
+        <span className="text-xs ml-2">[v3]</span>
       </p>
 
       {/* Map */}

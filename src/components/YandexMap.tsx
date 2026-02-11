@@ -46,6 +46,7 @@ export default function YandexMap({ points, onPointClick, onBoundsChange, classN
   const objectManagerRef = useRef<any>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const onBoundsChangeRef = useRef(onBoundsChange);
+  const initialBoundsSet = useRef(false);
 
   // Keep ref updated
   useEffect(() => {
@@ -166,6 +167,31 @@ export default function YandexMap({ points, onPointClick, onBoundsChange, classN
 
     objectManagerRef.current.removeAll();
     objectManagerRef.current.add(geoJson);
+
+    // Fit map to show all points (only on first load)
+    if (!initialBoundsSet.current && points.length > 0) {
+      initialBoundsSet.current = true;
+
+      // Calculate bounds from all points
+      let minLat = Infinity, maxLat = -Infinity;
+      let minLng = Infinity, maxLng = -Infinity;
+
+      points.forEach(point => {
+        const [lat, lng] = point.geometry.coordinates;
+        if (lat < minLat) minLat = lat;
+        if (lat > maxLat) maxLat = lat;
+        if (lng < minLng) minLng = lng;
+        if (lng > maxLng) maxLng = lng;
+      });
+
+      // Set bounds with padding
+      if (minLat !== Infinity) {
+        mapInstanceRef.current.setBounds(
+          [[minLat, minLng], [maxLat, maxLng]],
+          { checkZoomRange: true, zoomMargin: 50 }
+        );
+      }
+    }
 
   }, [points, isLoaded]);
 
