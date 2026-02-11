@@ -178,10 +178,14 @@ export default function PointsAdminPage() {
   const searchFilteredPoints = useMemo(() => {
     if (!points?.features) return [];
 
-    // Filter out invalid points first
-    const validPoints = points.features.filter(
-      (p) => p && p.id != null && p.properties && p.geometry
-    );
+    // Filter out invalid points and deduplicate by ID
+    const seenIds = new Set<number>();
+    const validPoints = points.features.filter((p) => {
+      if (!p || p.id == null || !p.properties || !p.geometry) return false;
+      if (seenIds.has(p.id)) return false;
+      seenIds.add(p.id);
+      return true;
+    });
 
     const query = searchQuery.toLowerCase().trim();
 
@@ -470,7 +474,8 @@ export default function PointsAdminPage() {
 
       {/* Stats */}
       <p className="text-[#9DA1A8] mb-4">
-        Всего точек: {points?.features.length || 0}
+        Всего точек: {points?.features.length || 0} (уникальных: {searchFilteredPoints.length || 0})
+        <span className="text-xs ml-2">[v2]</span>
       </p>
 
       {/* Map */}
