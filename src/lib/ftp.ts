@@ -12,7 +12,7 @@ const FTP_CONFIG = {
 
 export async function uploadFileViaFTP(content: string): Promise<void> {
   const client = new ftp.Client();
-  client.ftp.verbose = false;
+  client.ftp.verbose = true;
 
   try {
     await client.access({
@@ -20,8 +20,11 @@ export async function uploadFileViaFTP(content: string): Promise<void> {
       port: FTP_CONFIG.port,
       user: FTP_CONFIG.user,
       password: FTP_CONFIG.password,
-      secure: FTP_CONFIG.secure,
+      secure: false,
     });
+
+    // Use passive mode with IP from control connection
+    client.ftp.ipFamily = 4;
 
     // Convert string to readable stream
     const stream = Readable.from([content]);
@@ -34,7 +37,7 @@ export async function uploadFileViaFTP(content: string): Promise<void> {
 
 export async function downloadFileViaFTP(): Promise<string> {
   const client = new ftp.Client();
-  client.ftp.verbose = false;
+  client.ftp.verbose = true;
 
   try {
     await client.access({
@@ -42,8 +45,10 @@ export async function downloadFileViaFTP(): Promise<string> {
       port: FTP_CONFIG.port,
       user: FTP_CONFIG.user,
       password: FTP_CONFIG.password,
-      secure: FTP_CONFIG.secure,
+      secure: false,
     });
+
+    client.ftp.ipFamily = 4;
 
     const chunks: Buffer[] = [];
     const writable = new (require('stream').Writable)({
