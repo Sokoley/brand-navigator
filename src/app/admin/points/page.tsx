@@ -178,17 +178,21 @@ export default function PointsAdminPage() {
   const searchFilteredPoints = useMemo(() => {
     if (!points?.features) return [];
 
+    // Filter out invalid points first
+    const validPoints = points.features.filter(
+      (p) => p && p.id != null && p.properties && p.geometry
+    );
+
     const query = searchQuery.toLowerCase().trim();
 
     // If no search query, return all points sorted by ID
     if (!query) {
-      return [...points.features].sort((a, b) => a.id - b.id);
+      return [...validPoints].sort((a, b) => a.id - b.id);
     }
 
     // Filter and calculate relevance score
-    const scored = points.features
+    const scored = validPoints
       .map((point) => {
-        if (!point || !point.properties) return null;
 
         const header = (point.properties?.balloonContentHeader || '').toLowerCase();
         const adress = (point.properties?.adress || '').toLowerCase();
@@ -660,7 +664,9 @@ export default function PointsAdminPage() {
             </tr>
           </thead>
           <tbody>
-            {searchFilteredPoints.map((point) => (
+            {searchFilteredPoints.map((point) => {
+              if (!point || !point.properties) return null;
+              return (
               <tr
                 key={point.id}
                 className={`hover:bg-gray-50 ${editingPoint?.id === point.id ? 'bg-yellow-50' : ''}`}
@@ -698,7 +704,8 @@ export default function PointsAdminPage() {
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
 
