@@ -62,29 +62,11 @@ export default function ProductsPage() {
       </div>
 
       <div className="max-w-[1440px] mx-auto px-4 md:px-8">
-        <div className="flex flex-wrap justify-center gap-4 mb-8">
-          <a
-            href="https://disk.yandex.ru/d/Gibn8WMao0CGmA"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-6 py-3 bg-[#007bff] text-white rounded-lg font-medium hover:bg-[#0056b3] transition-colors"
-          >
-            Логотипы
-          </a>
-          <a
-            href="https://smazka.ru/catalog-2025/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-6 py-3 bg-[#28a745] text-white rounded-lg font-medium hover:bg-[#218838] transition-colors"
-          >
-            Каталог
-          </a>
-        </div>
         {alert && (
           <Alert type={alert.type} message={alert.message} />
         )}
 
-        <div className="mb-8">
+        <div className="mb-4">
           <input
             type="text"
             value={searchQuery}
@@ -92,6 +74,25 @@ export default function ProductsPage() {
             placeholder="Поиск товаров..."
             className="w-full px-4 md:px-5 py-3 md:py-4 border-2 border-border rounded-[25px] text-base md:text-lg outline-none transition-all focus:border-primary focus:shadow-[0_0_0_3px_rgba(157,161,168,0.1)]"
           />
+        </div>
+
+        <div className="flex flex-wrap gap-3 mb-6">
+          <a
+            href="https://disk.yandex.ru/d/Gibn8WMao0CGmA"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-5 py-2 bg-transparent border-2 border-[#007bff] text-[#007bff] rounded-lg font-medium hover:bg-[#007bff] hover:text-white transition-colors"
+          >
+            Логотипы
+          </a>
+          <a
+            href="https://smazka.ru/catalog-2025/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-5 py-2 bg-transparent border-2 border-[#28a745] text-[#28a745] rounded-lg font-medium hover:bg-[#28a745] hover:text-white transition-colors"
+          >
+            Каталог
+          </a>
         </div>
 
         <div className="flex justify-between items-center mb-5">
