@@ -190,40 +190,45 @@ export default function PointsAdminPage() {
       return [...validPoints].sort((a, b) => a.id - b.id);
     }
 
-    // Filter and calculate relevance score
-    const scored = validPoints
-      .map((point) => {
+    // Filter points that match the query and calculate relevance score
+    const results: { point: MapPoint; score: number }[] = [];
 
-        const header = (point.properties?.balloonContentHeader || '').toLowerCase();
-        const adress = (point.properties?.adress || '').toLowerCase();
-        const footer = (point.properties?.balloonContentFooter || '').toLowerCase();
-        const idStr = point.id?.toString() || '';
+    for (const point of validPoints) {
+      const header = (point.properties?.balloonContentHeader || '').toLowerCase();
+      const adress = (point.properties?.adress || '').toLowerCase();
+      const idStr = String(point.id);
 
-        // Calculate relevance score (higher = more relevant)
-        let score = 0;
+      // Check if point matches query
+      const matchesHeader = header.includes(query);
+      const matchesAddress = adress.includes(query);
+      const matchesId = idStr === query; // Exact ID match only
 
-        if (header === query) {
-          score = 100; // Exact match in name
-        } else if (header.startsWith(query)) {
-          score = 80; // Name starts with query
-        } else if (header.includes(query)) {
-          score = 60; // Name contains query
-        } else if (adress.startsWith(query)) {
-          score = 40; // Address starts with query
-        } else if (adress.includes(query) || footer.includes(query)) {
-          score = 20; // Address/footer contains query
-        } else if (idStr.includes(query)) {
-          score = 10; // ID contains query
-        }
+      // Skip if no match
+      if (!matchesHeader && !matchesAddress && !matchesId) {
+        continue;
+      }
 
-        if (score === 0) return null;
+      // Calculate relevance score (higher = more relevant)
+      let score = 0;
+      if (header === query) {
+        score = 100;
+      } else if (header.startsWith(query)) {
+        score = 80;
+      } else if (matchesHeader) {
+        score = 60;
+      } else if (adress.startsWith(query)) {
+        score = 40;
+      } else if (matchesAddress) {
+        score = 20;
+      } else if (matchesId) {
+        score = 10;
+      }
 
-        return { point, score };
-      })
-      .filter((item): item is { point: MapPoint; score: number } => item !== null);
+      results.push({ point, score });
+    }
 
     // Sort by score (descending), then by ID
-    return scored
+    return results
       .sort((a, b) => b.score - a.score || a.point.id - b.point.id)
       .map((item) => item.point);
   }, [points, searchQuery]);
