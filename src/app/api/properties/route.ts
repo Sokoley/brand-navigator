@@ -8,8 +8,6 @@ import {
   getSubcategoriesForCategory
 } from '@/lib/properties-manager';
 import { checkPropertyUsage, updatePropertyInFiles } from '@/lib/property-validator';
-import fs from 'fs';
-import path from 'path';
 
 export async function GET() {
   const properties = loadProperties();
@@ -42,19 +40,7 @@ export async function PATCH(request: Request) {
   const success = updatePropertyValue(property_type, old_value, new_value, parent_category);
 
   if (success) {
-    // Update all files that use this property value
     const updateResult = await updatePropertyInFiles(property_type, old_value, new_value);
-
-    // Invalidate products cache
-    const cacheFile = path.join(process.cwd(), 'products_cache.json');
-    try {
-      if (fs.existsSync(cacheFile)) {
-        fs.unlinkSync(cacheFile);
-      }
-    } catch (error) {
-      console.error('Error deleting cache:', error);
-    }
-
     return NextResponse.json({
       success: true,
       filesUpdated: updateResult.updatedCount,
@@ -100,16 +86,6 @@ export async function DELETE(request: Request) {
   const success = deletePropertyValue(propertyType, value, parent || undefined);
 
   if (success) {
-    // Invalidate products cache
-    const cacheFile = path.join(process.cwd(), 'products_cache.json');
-    try {
-      if (fs.existsSync(cacheFile)) {
-        fs.unlinkSync(cacheFile);
-      }
-    } catch (error) {
-      console.error('Error deleting cache:', error);
-    }
-
     return NextResponse.json({ success: true });
   }
 

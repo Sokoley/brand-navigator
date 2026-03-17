@@ -1,7 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { YandexDiskItem } from '@/lib/types';
+import { parseProductFilePath } from '@/lib/product-paths';
 import { getPreviewProxyUrl, getDownloadProxyUrl, formatFileSize, formatDate, PROPERTY_COLORS, PROPERTY_DISPLAY_ORDER } from '@/lib/utils';
 import { useAuth } from '@/components/AuthProvider';
 import { uploadFilesWithProgress } from '@/lib/upload-files';
@@ -9,6 +11,9 @@ import FilePreview from '@/components/FilePreview';
 import UploadProgress from '@/components/UploadProgress';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+
+const PRODUCT_FILES_CACHE_MAX = 30;
+const productFilesCache = new Map<string, YandexDiskItem[]>();
 
 function getFileTypeFromName(name: string): string {
   const ext = name.split('.').pop()?.toLowerCase() || '';
@@ -18,13 +23,49 @@ function getFileTypeFromName(name: string): string {
   return '';
 }
 
+function applyFilesToState(
+  productFiles: YandexDiskItem[],
+  setters: {
+    setAllFiles: (f: YandexDiskItem[]) => void;
+    setFileTypes: (t: string[]) => void;
+    setProductSkus: (s: string[]) => void;
+    setProductGroup: (g: string) => void;
+    setMainPhotoPreview: (p: string) => void;
+    setSelectedFile: (f: YandexDiskItem | null) => void;
+  },
+) {
+  setters.setAllFiles(productFiles);
+  const types = new Set<string>();
+  const skus = new Set<string>();
+  let group = '';
+  let mainPreview = '';
+  for (const f of productFiles) {
+    const props = f.custom_properties || {};
+    const fromPath = parseProductFilePath(f.path);
+    const ft = fromPath.fileTypeFolder || props['Тип файла'] || getFileTypeFromName(f.name);
+    if (ft) types.add(ft);
+    if (props['SKU']) skus.add(props['SKU']);
+    if (props['Группа товаров'] && !group) group = props['Группа товаров'];
+    if (props['Главное фото'] === 'true' && f.preview) mainPreview = f.preview;
+  }
+  if (!mainPreview && productFiles.length > 0 && productFiles[0].preview) mainPreview = productFiles[0].preview;
+  setters.setFileTypes(Array.from(types).sort());
+  setters.setProductSkus(Array.from(skus));
+  setters.setProductGroup(group);
+  setters.setMainPhotoPreview(mainPreview);
+  const mainPhotoFile = productFiles.find((f) => f.custom_properties?.['Главное фото'] === 'true');
+  setters.setSelectedFile(mainPhotoFile ?? null);
+}
+
 export default function ProductDetailPage({ params }: { params: { name: string } }) {
   const { isAuth } = useAuth();
+  const searchParams = useSearchParams();
   const productName = decodeURIComponent(params.name);
+  const groupFromUrl = useMemo(() => searchParams.get('group'), [searchParams]);
   const [allFiles, setAllFiles] = useState<YandexDiskItem[]>([]);
   const [filteredFiles, setFilteredFiles] = useState<YandexDiskItem[]>([]);
   const [fileTypes, setFileTypes] = useState<string[]>([]);
-  const [availableFileTypes, setAvailableFileTypes] = useState<string[]>([]);
+  const [availableFileTypes, setAvailableFileTypes] = useState<string[]>(['Кросс коды', 'Главное фото', 'Фото', 'Видео', 'Документы', 'Этикетки']);
   const [activeFilter, setActiveFilter] = useState<string>('all');
   const [selectedFile, setSelectedFile] = useState<YandexDiskItem | null>(null);
   const [productGroup, setProductGroup] = useState('');
@@ -35,6 +76,7 @@ export default function ProductDetailPage({ params }: { params: { name: string }
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
   const [deleting, setDeleting] = useState<Set<string>>(new Set());
+  const [settingMainPhoto, setSettingMainPhoto] = useState(false);
   const [showSkuModal, setShowSkuModal] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[] | null>(null);
   const [selectedSku, setSelectedSku] = useState<string>('');
@@ -47,62 +89,44 @@ export default function ProductDetailPage({ params }: { params: { name: string }
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchFiles = useCallback(() => {
-    fetch('/api/yandex/files')
+    const cacheKey = `${productName}\0${groupFromUrl ?? ''}`;
+    const setters = {
+      setAllFiles,
+      setFileTypes,
+      setProductSkus,
+      setProductGroup,
+      setMainPhotoPreview,
+      setSelectedFile,
+    };
+
+    const cached = productFilesCache.get(cacheKey);
+    if (cached) {
+      applyFilesToState(cached, setters);
+      setLoading(false);
+    }
+
+    const url = new URL('/api/yandex/product-files', window.location.origin);
+    url.searchParams.set('name', productName);
+    if (groupFromUrl) url.searchParams.set('group', groupFromUrl);
+    fetch(url.toString())
       .then((r) => r.json())
       .then((items: YandexDiskItem[]) => {
-        const productFiles = items.filter((f) => {
-          const props = f.custom_properties || {};
-          return props['Название товара'] === productName;
-        });
-
-        setAllFiles(productFiles);
-
-        // Extract file types (only from product files, not layouts)
-        const types = new Set<string>();
-        const skus = new Set<string>();
-        let group = '';
-        let mainPreview = '';
-
-        for (const f of productFiles) {
-          const props = f.custom_properties || {};
-          const contentType = props['Тип контента'] || '';
-
-          // Only count file types for "Товар" content type
-          if (contentType === 'Товар' || contentType === '') {
-            const ft = props['Тип файла'] || getFileTypeFromName(f.name);
-            if (ft) types.add(ft);
-          }
-
-          if (props['SKU']) skus.add(props['SKU']);
-          if (props['Группа товаров'] && !group) group = props['Группа товаров'];
-          if (props['Главное фото'] === 'true' && f.preview) {
-            mainPreview = f.preview;
-          }
+        const productFiles = Array.isArray(items) ? items : [];
+        applyFilesToState(productFiles, setters);
+        if (productFilesCache.size >= PRODUCT_FILES_CACHE_MAX) {
+          const firstKey = productFilesCache.keys().next().value;
+          if (firstKey != null) productFilesCache.delete(firstKey);
         }
-
-        if (!mainPreview && productFiles.length > 0 && productFiles[0].preview) {
-          mainPreview = productFiles[0].preview;
+        productFilesCache.set(cacheKey, productFiles);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!cached) {
+          setAllFiles([]);
         }
-
-        setFileTypes(Array.from(types).sort());
-        setProductSkus(Array.from(skus));
-        setProductGroup(group);
-        setMainPhotoPreview(mainPreview);
-
-        // Set main photo as default preview
-        const mainPhotoFile = productFiles.find((f) => {
-          const props = f.custom_properties || {};
-          return props['Главное фото'] === 'true';
-        });
-        if (mainPhotoFile) {
-          setSelectedFile(mainPhotoFile);
-        }
-
-        // Default filter will be set after availableFileTypes is loaded
-
         setLoading(false);
       });
-  }, [productName]);
+  }, [productName, groupFromUrl]);
 
   useEffect(() => {
     fetchFiles();
@@ -120,17 +144,17 @@ export default function ProductDetailPage({ params }: { params: { name: string }
       })
       .catch(() => {
         // Fallback to default types if API fails
-        setAvailableFileTypes(['PNG', 'Главное фото', 'Фото', 'Видео', 'Документ']);
+        setAvailableFileTypes(['Кросс коды', 'Главное фото', 'Фото', 'Видео', 'Документы', 'Этикетки']);
       });
   }, []);
 
   // Set default filter when available file types and product files are loaded
   useEffect(() => {
     if (availableFileTypes.length > 0 && fileTypes.length > 0 && activeFilter === 'all') {
-      // Try to default to PNG if available in both lists
-      const pngType = availableFileTypes.find((ft) => fileTypes.includes(ft) && ft.toLowerCase().includes('png'));
-      if (pngType) {
-        setActiveFilter(pngType);
+      // Try to default to Кросс коды (or PNG for legacy) if available
+      const crossType = availableFileTypes.find((ft) => fileTypes.includes(ft) && (ft === 'Кросс коды' || ft.toLowerCase().includes('png')));
+      if (crossType) {
+        setActiveFilter(crossType);
       }
     }
   }, [availableFileTypes, fileTypes, activeFilter]);
@@ -191,51 +215,30 @@ export default function ProductDetailPage({ params }: { params: { name: string }
   }, [selectedFile]);
 
   const handleSetMainPhoto = useCallback(async (file: YandexDiskItem) => {
-    if (!confirm(`Установить "${file.name}" как главное фото?`)) return;
+    if (settingMainPhoto) return;
+    if (!confirm(`Установить "${file.name}" как главное фото? (С других фото товара флаг будет снят)`)) return;
 
+    setSettingMainPhoto(true);
     try {
-      // First, remove "Главное фото" tag from all other files
-      const mainPhotos = allFiles.filter((f) => {
-        return f.custom_properties?.['Главное фото'] === 'true' && f.path !== file.path;
-      });
-
-      for (const mainPhoto of mainPhotos) {
-        const newProps = { ...mainPhoto.custom_properties };
-        delete newProps['Главное фото']; // Remove the main photo tag
-
-        await fetch('/api/yandex/properties', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            path: mainPhoto.path,
-            properties: newProps,
-          }),
-        });
-      }
-
-      // Add main photo tag to this file (keep original file type)
-      const newProps = {
-        ...file.custom_properties,
-        'Главное фото': 'true',
-      };
-      const res = await fetch('/api/yandex/properties', {
+      const res = await fetch('/api/yandex/main-photo', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          path: file.path,
-          properties: newProps,
-        }),
+        body: JSON.stringify({ productName, filePath: file.path }),
       });
+      const data = await res.json();
 
       if (res.ok) {
-        fetchFiles(); // Reload files to reflect changes
+        if (data.warning) alert(data.warning);
+        fetchFiles();
       } else {
-        alert('Ошибка при установке главного фото');
+        alert(data.error || 'Ошибка при установке главного фото');
       }
     } catch {
       alert('Ошибка при установке главного фото');
+    } finally {
+      setSettingMainPhoto(false);
     }
-  }, [allFiles, fetchFiles]);
+  }, [productName, fetchFiles, settingMainPhoto]);
 
   const handleUpload = useCallback(async (files: File[], fileType: string, sku?: string) => {
     setUploading(true);
@@ -251,12 +254,23 @@ export default function ProductDetailPage({ params }: { params: { name: string }
         return { file, properties: props };
       });
 
-      const { errorCount } = await uploadFilesWithProgress(entries, 'Товар', (current, total) => {
-        setUploadProgress({ current, total });
-      });
+      if (!productGroup.trim()) {
+        alert('Укажите группу товара для загрузки файлов. Группа определяется по загруженным файлам.');
+        setUploading(false);
+        setUploadProgress({ current: 0, total: 0 });
+        return;
+      }
+
+      const { results, errorCount } = await uploadFilesWithProgress(
+        entries,
+        'Товар',
+        (current, total) => setUploadProgress({ current, total }),
+        { productName, productGroup: productGroup || '', productSkus },
+      );
 
       if (errorCount > 0) {
-        alert(`Ошибка: ${errorCount} файл(ов) не загружено`);
+        const firstMsg = results.find((r) => r.type === 'error')?.message;
+        alert(firstMsg || `Ошибка: ${errorCount} файл(ов) не загружено`);
       }
       fetchFiles();
     } catch {
@@ -265,7 +279,7 @@ export default function ProductDetailPage({ params }: { params: { name: string }
       setUploading(false);
       setUploadProgress({ current: 0, total: 0 });
     }
-  }, [productName, productGroup, allFiles, fetchFiles]);
+  }, [productName, productGroup, productSkus, fetchFiles]);
 
   const handleDownloadAll = useCallback(async () => {
     if (downloading) return;
@@ -274,17 +288,17 @@ export default function ProductDetailPage({ params }: { params: { name: string }
     try {
       const zip = new JSZip();
 
-      if (activeFilter === 'PNG') {
-        // Download all PNG files
-        const pngFiles = filteredFiles;
-        if (pngFiles.length === 0) {
+      if (activeFilter === 'Кросс коды') {
+        // Download all Кросс коды files (includes legacy PNG)
+        const crossFiles = filteredFiles;
+        if (crossFiles.length === 0) {
           alert('Нет файлов для загрузки');
           setDownloading(false);
           return;
         }
 
         // Fetch each file and add to zip
-        for (const file of pngFiles) {
+        for (const file of crossFiles) {
           try {
             if (file.file) {
               const response = await fetch(getDownloadProxyUrl(file.file, file.name));
@@ -298,7 +312,7 @@ export default function ProductDetailPage({ params }: { params: { name: string }
 
         // Generate and download zip
         const content = await zip.generateAsync({ type: 'blob' });
-        saveAs(content, `${productName}_PNG.zip`);
+        saveAs(content, `${productName}_Кросс_коды.zip`);
       } else if (activeFilter === 'Карточки для маркетплейсов') {
         // Download all marketplace images
         if (marketplaceImages.length === 0) {
@@ -367,12 +381,16 @@ export default function ProductDetailPage({ params }: { params: { name: string }
         })
       );
     } else {
-      // Show files of specific type (excluding layouts)
+      // Show files of specific type (excluding layouts). Type from path or props.
       setFilteredFiles(
         allFiles.filter((f) => {
           const props = f.custom_properties || {};
+          const fromPath = parseProductFilePath(f.path);
           const contentType = props['Тип контента'] || '';
-          const ft = props['Тип файла'] || getFileTypeFromName(f.name);
+          const ft = fromPath.fileTypeFolder || props['Тип файла'] || getFileTypeFromName(f.name);
+          if (activeFilter === 'Кросс коды') {
+            return (ft === 'Кросс коды' || ft === 'PNG') && contentType !== 'Макет';
+          }
           return ft === activeFilter && contentType !== 'Макет';
         })
       );
@@ -448,7 +466,7 @@ export default function ProductDetailPage({ params }: { params: { name: string }
           }
           const files = Array.from(fileList);
           e.target.value = '';
-          if (activeFilter === 'PNG') {
+          if (activeFilter === 'Кросс коды') {
             setPendingFiles(files);
             setSelectedSku(productSkus[0] || '');
             setNewSku('');
@@ -458,7 +476,7 @@ export default function ProductDetailPage({ params }: { params: { name: string }
           }
         }}
       />
-      {/* SKU selection modal for PNG uploads */}
+      {/* SKU selection modal for Кросс коды uploads */}
       {showSkuModal && (
         <div
           className="fixed inset-0 bg-black/50 z-[1000] flex items-center justify-center"
@@ -528,7 +546,7 @@ export default function ProductDetailPage({ params }: { params: { name: string }
                 onClick={() => {
                   const sku = newSku || selectedSku;
                   if (pendingFiles && sku) {
-                    handleUpload(pendingFiles, 'PNG', sku);
+                    handleUpload(pendingFiles, 'Кросс коды', sku);
                   }
                   setShowSkuModal(false);
                   setPendingFiles(null);
@@ -579,11 +597,15 @@ export default function ProductDetailPage({ params }: { params: { name: string }
                 >
                   Все
                 </button>
-                {availableFileTypes.filter((ft) => ft !== 'Главное фото').map((ft) => {
+                {availableFileTypes.filter((ft) => ft !== 'Главное фото' && ft !== 'PNG' && (ft !== 'Этикетки' || isAuth)).map((ft) => {
                   const count = allFiles.filter((f) => {
                     const props = f.custom_properties || {};
+                    const fromPath = parseProductFilePath(f.path);
                     const contentType = props['Тип контента'] || '';
-                    const t = props['Тип файла'] || getFileTypeFromName(f.name);
+                    const t = fromPath.fileTypeFolder || props['Тип файла'] || getFileTypeFromName(f.name);
+                    if (ft === 'Кросс коды') {
+                      return (t === 'Кросс коды' || t === 'PNG') && contentType !== 'Макет';
+                    }
                     return t === ft && contentType !== 'Макет';
                   }).length;
                   return (
@@ -640,7 +662,7 @@ export default function ProductDetailPage({ params }: { params: { name: string }
           {/* File list + preview */}
           <div className="flex gap-4 md:gap-5 max-w-[1440px] mx-auto px-4 md:px-8 flex-col md:flex-row">
             <div className="w-full md:w-[70%] overflow-y-auto h-[400px] md:h-[600px] border border-border p-3 md:p-4 rounded-lg bg-white">
-              {/* Upload button for authorized users in PNG tab */}
+              {/* Upload button for authorized users in Кросс коды tab */}
               {isAuth && activeFilter !== 'all' && activeFilter !== 'Макеты' && activeFilter !== 'Карточки для маркетплейсов' && (
                 <div className="mb-4 flex flex-col gap-3">
                   <button
@@ -659,12 +681,12 @@ export default function ProductDetailPage({ params }: { params: { name: string }
                   )}
                 </div>
               )}
-              {/* Download all button for PNG and Marketplace Cards tabs */}
-              {(activeFilter === 'PNG' || activeFilter === 'Карточки для маркетплейсов') && (
+              {/* Download all button for Кросс коды and Marketplace Cards tabs */}
+              {(activeFilter === 'Кросс коды' || activeFilter === 'Карточки для маркетплейсов') && (
                 <div className="mb-4">
                   <button
                     onClick={handleDownloadAll}
-                    disabled={downloading || (activeFilter === 'PNG' && filteredFiles.length === 0) || (activeFilter === 'Карточки для маркетплейсов' && marketplaceImages.length === 0)}
+                    disabled={downloading || (activeFilter === 'Кросс коды' && filteredFiles.length === 0) || (activeFilter === 'Карточки для маркетплейсов' && marketplaceImages.length === 0)}
                     className="px-4 py-2 rounded-lg cursor-pointer text-sm bg-[#9DA1A8] text-white border-none hover:bg-[#7A7E85] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {downloading ? 'Скачивание...' : 'Скачать всё'}
@@ -836,19 +858,21 @@ export default function ProductDetailPage({ params }: { params: { name: string }
                           </a>
                         )}
                         {isAuth && (() => {
-                          const fileType = props['Тип файла'] || getFileTypeFromName(file.name);
-                          const isPhoto = fileType === 'Фото' || fileType === 'PNG';
+                          const fromPath = parseProductFilePath(file.path);
+                          const fileType = fromPath.fileTypeFolder || props['Тип файла'] || getFileTypeFromName(file.name);
+                          const isPhoto = fileType === 'Фото' || fileType === 'PNG' || fileType === 'Кросс коды';
                           const isMainPhoto = props['Главное фото'] === 'true';
 
                           return (
                             <>
                               {isPhoto && !isMainPhoto && (
                                 <button
-                                  className="text-base p-2 rounded-md hover:bg-yellow-50 transition-colors bg-transparent border-none cursor-pointer"
+                                  className="text-base p-2 rounded-md hover:bg-yellow-50 transition-colors bg-transparent border-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     handleSetMainPhoto(file);
                                   }}
+                                  disabled={settingMainPhoto}
                                   title="Установить как главное фото"
                                 >
                                   ⭐

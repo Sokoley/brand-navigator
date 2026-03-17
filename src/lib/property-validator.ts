@@ -1,11 +1,11 @@
-import { getFiles, setCustomProperties } from './yandex-disk';
+import { getAllFilesRecursive, setCustomProperties } from './yandex-disk';
 
 export async function checkPropertyUsage(
   propertyType: string,
   value: string
 ): Promise<{ isUsed: boolean; fileCount: number; fileNames: string[] }> {
   try {
-    const files = await getFiles();
+    const files = await getAllFilesRecursive();
     const matchingFiles: string[] = [];
 
     for (const file of files) {
@@ -43,7 +43,7 @@ export async function updatePropertyInFiles(
   newValue: string
 ): Promise<{ success: boolean; updatedCount: number; errors: string[] }> {
   try {
-    const files = await getFiles();
+    const files = await getAllFilesRecursive();
     let updatedCount = 0;
     const errors: string[] = [];
 

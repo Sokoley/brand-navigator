@@ -246,17 +246,15 @@ export default function PropertiesAdminPage() {
         />
       </PropertyAccordion>
 
-      {/* Read-only properties */}
       <PropertyAccordion title="Тип файла" count={Array.isArray(properties['Тип файла']) ? properties['Тип файла'].length : 0}>
         <PropertyEditor
           propertyType="Тип файла"
           values={Array.isArray(properties['Тип файла']) ? properties['Тип файла'] : []}
-          onAdd={() => Promise.resolve(false)}
-          onUpdate={() => Promise.resolve(false)}
-          onDelete={() => Promise.resolve(false)}
-          readOnly
+          {...createSimpleHandlers('Тип файла')}
         />
       </PropertyAccordion>
+
+      {/* Read-only properties */}
 
       <PropertyAccordion title="Тип контента" count={Array.isArray(properties['Тип контента']) ? properties['Тип контента'].length : 0}>
         <PropertyEditor

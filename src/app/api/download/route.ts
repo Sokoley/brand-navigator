@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isAllowedYandexUrl } from '@/lib/allowed-yandex-urls';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -7,6 +8,9 @@ export async function GET(request: Request) {
 
   if (!url) {
     return new NextResponse('Missing url parameter', { status: 400 });
+  }
+  if (!isAllowedYandexUrl(url)) {
+    return new NextResponse('Invalid url', { status: 400 });
   }
 
   try {

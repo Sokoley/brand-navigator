@@ -22,6 +22,7 @@ export interface Product {
   videos: FileInfo[];
   documents: FileInfo[];
   png_files: FileInfo[];
+  label_files: FileInfo[];
   file_count?: number;
   all_files?: FileInfo[];
 }

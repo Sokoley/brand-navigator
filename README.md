@@ -1,36 +1,42 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Brand Navigator
 
-## Getting Started
+Приложение для упорядоченного хранения файлов и макетов, связанных с продуктами, на Yandex Disk и быстрого доступа к ним.
 
-First, run the development server:
+- **Хранение:** файлы и макеты на Yandex Disk (структура: `Brand/Товары/{Группа}/{Товар}/{Тип файла}/`).
+- **Индекс:** метаданные товаров и файлов хранятся в MariaDB для быстрого поиска и списков без полного обхода Диска.
+- **Администратор:** загрузка и удаление файлов и товаров, настройка свойств, установка главного фото. Точки на карте — отдельная функция.
+- **Пользователь:** просмотр списка товаров, карточка товара, скачивание и превью файлов.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Запуск
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+1. Скопируйте переменные окружения:
+   ```bash
+   cp .env.example .env
+   ```
+2. Заполните `.env`: `YANDEX_DISK_TOKEN`, `ADMIN_LOGIN`, `ADMIN_PASSWORD`, при использовании индекса — `DATABASE_URL` (MariaDB из ISPmanager).
+3. Установите зависимости и запустите:
+   ```bash
+   npm install
+   npm run dev
+   ```
+4. Откройте [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Основные страницы
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **Все товары** (`/products`) — список товаров, поиск, переход в карточку товара.
+- **Карточка товара** (`/product/[name]`) — файлы по типам, превью, скачивание, для админа — загрузка и удаление.
+- **Все макеты** (`/all-files`) — плоский список макетов с фильтрами (доступно при входе).
+- **Загрузка** (`/upload`, `/upload-product`) — для админа: загрузка макетов и файлов в папки товаров.
 
-## Learn More
+## Индекс в MariaDB
 
-To learn more about Next.js, take a look at the following resources:
+При заданной переменной `DATABASE_URL` список товаров и файлов товара читается из БД. После первого настройки БД выполните полную переиндексацию с Yandex Disk:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **POST** `/api/admin/reindex` (требуется авторизация администратора).  
+  Создаёт таблицы при необходимости, затем обходит Диск и заполняет индекс. Опциональный параметр `?content=Товар`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Без `DATABASE_URL` список товаров строится по запросу из Yandex (медленнее), файлы товара — по папкам на Диске.
 
-## Deploy on Vercel
+## Деплой
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+См. [DEPLOY.md](DEPLOY.md).

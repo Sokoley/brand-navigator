@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "autoprefixer": "^10.4.23",
+    "mysql2": "^3.11.0",
     "basic-ftp": "^5.1.0",
     "exceljs": "^4.4.0",
     "file-saver": "^2.0.5",

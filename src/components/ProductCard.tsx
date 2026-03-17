@@ -13,10 +13,15 @@ export default function ProductCard({
   searchQuery?: string;
   onDelete?: (name: string) => void;
 }) {
+  // Preview: main photo if set, otherwise last uploaded image from Кросс коды
+  const fallbackPng =
+    product.png_files.length > 0
+      ? [...product.png_files].sort((a, b) => (b.created || '').localeCompare(a.created || ''))[0]
+      : null;
   const mainImage = product.main_photo
     ? getPreviewProxyUrl(typeof product.main_photo === 'string' ? '' : product.main_photo.preview)
-    : product.png_files.length > 0
-      ? getPreviewProxyUrl(product.png_files[0].preview)
+    : fallbackPng
+      ? getPreviewProxyUrl(fallbackPng.preview)
       : '';
 
   const totalFiles =
@@ -24,11 +29,12 @@ export default function ProductCard({
     product.photos.length +
     product.videos.length +
     product.documents.length +
-    product.png_files.length;
+    product.png_files.length +
+    (product.label_files?.length ?? 0);
 
   return (
     <div className="bg-white border border-border rounded-xl p-4 md:p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
-      <Link href={`/product/${encodeURIComponent(product.name)}`} className="no-underline text-inherit">
+      <Link href={`/product/${encodeURIComponent(product.name)}${product.group ? `?group=${encodeURIComponent(product.group)}` : ''}`} className="no-underline text-inherit">
         <div className="flex items-start gap-3 md:gap-4 mb-3 md:mb-4">
           {mainImage ? (
             <img
@@ -73,12 +79,15 @@ export default function ProductCard({
           </div>
         )}
 
-        <div className="flex gap-4 mt-4 text-xs text-gray-500">
+        <div className="flex flex-wrap gap-4 mt-4 text-xs text-gray-500">
           <span className="flex items-center gap-1">
             Files: {product.file_count || totalFiles}
           </span>
           <span className="flex items-center gap-1">
-            PNG: {product.png_files.length}
+            Кросс коды: {product.png_files?.length ?? 0}
+          </span>
+          <span className="flex items-center gap-1">
+            Этикетки: {product.label_files?.length ?? 0}
           </span>
         </div>
       </Link>

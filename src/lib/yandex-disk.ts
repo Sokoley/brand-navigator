@@ -50,6 +50,49 @@ export async function getFiles(path: string = 'disk:/Brand', limit: number = 100
   return [];
 }
 
+/** Get single resource (file or dir) by path. Returns item with file, preview URLs. */
+export async function getResource(path: string, previewSize: string = 'XXXL'): Promise<YandexDiskItem | null> {
+  const url = `${YANDEX_API_BASE}?path=${encodeURIComponent(path)}&preview_size=${previewSize}`;
+  const result = await yandexRequest(url);
+  if (result.code !== 200) return null;
+  const data = JSON.parse(result.data) as YandexDiskItem;
+  return data;
+}
+
+/** Create a folder. Parent folders are not created automatically. Returns true if created or already exists. */
+export async function createFolder(folderPath: string): Promise<boolean> {
+  const url = `${YANDEX_API_BASE}?path=${encodeURIComponent(folderPath)}`;
+  const result = await yandexRequest(url, 'PUT');
+  // 201 = created, 409 = already exists
+  return result.code === 201 || result.code === 409;
+}
+
+/** Recursively list all files under basePath (e.g. disk:/Brand). Returns flat list of file items. Parallel per level. */
+export async function getAllFilesRecursive(basePath: string = 'disk:/Brand', previewSize: string = 'XXXL'): Promise<YandexDiskItem[]> {
+  const items = await getFiles(basePath, 1000, previewSize);
+  const files: YandexDiskItem[] = [];
+  const dirs: YandexDiskItem[] = [];
+
+  for (const item of items) {
+    if (item.type === 'file') {
+      files.push(item);
+    } else if (item.type === 'dir') {
+      dirs.push(item);
+    }
+  }
+
+  if (dirs.length > 0) {
+    const nestedArrays = await Promise.all(
+      dirs.map((dir) => getAllFilesRecursive(dir.path, previewSize)),
+    );
+    for (const arr of nestedArrays) {
+      files.push(...arr);
+    }
+  }
+
+  return files;
+}
+
 export async function deleteResource(path: string): Promise<{ code: number }> {
   const url = `${YANDEX_API_BASE}?path=${encodeURIComponent(path)}`;
   const result = await yandexRequest(url, 'DELETE');

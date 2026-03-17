@@ -5,6 +5,7 @@ const PROTECTED_ROUTES = [
   { path: '/api/yandex/upload', methods: ['POST'] },
   { path: '/api/yandex/delete', methods: ['DELETE'] },
   { path: '/api/yandex/properties', methods: ['PATCH'] },
+  { path: '/api/admin/reindex', methods: ['POST'] },
   { path: '/api/properties', methods: ['POST', 'PATCH', 'DELETE'] },
   { path: '/api/points', methods: ['POST', 'PATCH', 'DELETE'] },
 ];
@@ -31,5 +32,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/api/yandex/:path*', '/api/properties', '/api/points'],
+  matcher: ['/api/yandex/:path*', '/api/admin/:path*', '/api/properties', '/api/points'],
 };

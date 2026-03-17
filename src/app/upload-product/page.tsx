@@ -81,7 +81,20 @@ export default function UploadProductPage() {
         }
       }
 
-      // Upload PNG files if provided
+      // Create all product folders on Yandex Disk: Товары/Группа/Товар + Фото, Видео, Документ, Кросс коды, Этикетки
+      const foldersRes = await fetch('/api/yandex/product-folders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productName: productName.trim(), productGroup: productGroup || '' }),
+      });
+      if (!foldersRes.ok) {
+        const err = await foldersRes.json().catch(() => ({}));
+        setAlert({ type: 'error', message: err.error || 'Ошибка создания папок на диске' });
+        setSubmitting(false);
+        return;
+      }
+
+      // Upload Кросс коды files if provided
       const entries: UploadFileEntry[] = [];
       const baseProps = {
         'Название товара': productName.trim(),
@@ -92,26 +105,30 @@ export default function UploadProductPage() {
         if (row.pngFile && row.sku.trim()) {
           entries.push({
             file: row.pngFile,
-            properties: { ...baseProps, SKU: row.sku.trim(), 'Тип файла': 'PNG' },
+            properties: { ...baseProps, SKU: row.sku.trim(), 'Тип файла': 'Кросс коды' },
           });
         }
       }
 
       if (entries.length > 0) {
         setUploadProgress({ current: 0, total: entries.length });
-        const { successCount, errorCount } = await uploadFilesWithProgress(entries, 'Товар', (current, total) => {
-          setUploadProgress({ current, total });
-        });
+        const skus = skuRows.map((r) => r.sku.trim()).filter(Boolean);
+        const { successCount, errorCount } = await uploadFilesWithProgress(
+          entries,
+          'Товар',
+          (current, total) => setUploadProgress({ current, total }),
+          { productName: productName.trim(), productGroup: productGroup || '', productSkus: skus },
+        );
 
         if (errorCount > 0) {
           setAlert({
             type: 'error',
-            message: `Товар создан, но загружено PNG: ${successCount}, ошибок: ${errorCount}`,
+            message: `Товар создан, но загружено Кросс коды: ${successCount}, ошибок: ${errorCount}`,
           });
         } else {
           setAlert({
             type: 'success',
-            message: `Товар "${productName}" успешно создан! Загружено PNG файлов: ${successCount}. Загрузите остальные файлы на странице товара.`,
+            message: `Товар "${productName}" успешно создан! Загружено файлов Кросс коды: ${successCount}. Загрузите остальные файлы на странице товара.`,
           });
         }
       } else {
@@ -220,7 +237,7 @@ export default function UploadProductPage() {
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold mb-1 text-sm">PNG файл</label>
+                  <label className="block font-semibold mb-1 text-sm">Кросс коды (файл)</label>
                   <label
                     className={`block p-3 border-2 border-dashed rounded-lg text-center cursor-pointer transition-all font-medium text-sm ${
                       row.pngFile
@@ -228,7 +245,7 @@ export default function UploadProductPage() {
                         : 'border-border bg-white hover:border-primary hover:bg-blue-50'
                     }`}
                   >
-                    {row.pngFile ? row.pngFile.name : 'Выбрать PNG'}
+                    {row.pngFile ? row.pngFile.name : 'Выбрать файл'}
                     <input
                       type="file"
                       accept=".png,image/png"
@@ -277,7 +294,7 @@ export default function UploadProductPage() {
               <UploadProgress
                 current={uploadProgress.current}
                 total={uploadProgress.total}
-                label="Загрузка PNG файлов..."
+                label="Загрузка файлов Кросс коды..."
               />
             </div>
           )}

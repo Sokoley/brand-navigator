@@ -10,10 +10,22 @@ export interface UploadResult {
   message?: string;
 }
 
+export interface ProductUploadOptions {
+  /** Precomputed path: "Товары/Группа/Товар". */
+  productFolderPath?: string;
+  /** Product name to build folder path. */
+  productName?: string;
+  /** Product group (Группа товаров) to build folder path. */
+  productGroup?: string;
+  /** SKUs for file properties. */
+  productSkus?: string[];
+}
+
 export async function uploadFilesWithProgress(
   entries: UploadFileEntry[],
   contentType: string,
   onProgress: (current: number, total: number) => void,
+  options?: ProductUploadOptions,
 ): Promise<{ results: UploadResult[]; successCount: number; errorCount: number }> {
   const results: UploadResult[] = [];
   const total = entries.length;
@@ -31,6 +43,15 @@ export async function uploadFilesWithProgress(
     for (const [key, value] of Object.entries(entry.properties)) {
       formData.append(`prop_0_${key}`, value);
     }
+    if (contentType === 'Товар' && options) {
+      if (options.productFolderPath) {
+        formData.append('productFolderPath', options.productFolderPath);
+      } else if (options.productName) {
+        formData.append('productName', options.productName);
+        if (options.productGroup != null) formData.append('productGroup', options.productGroup);
+        if (options.productSkus?.length) formData.append('productSkus', options.productSkus.join(','));
+      }
+    }
 
     try {
       const res = await fetch('/api/yandex/upload', { method: 'POST', body: formData });
@@ -40,7 +61,8 @@ export async function uploadFilesWithProgress(
         results.push(data.results[0]);
       } else {
         errorCount++;
-        results.push({ type: 'error', name: entry.file.name, message: data.results?.[0]?.message || 'Upload failed' });
+        const msg = data.error || data.results?.[0]?.message || 'Upload failed';
+        results.push({ type: 'error', name: entry.file.name, message: msg });
       }
     } catch {
       errorCount++;

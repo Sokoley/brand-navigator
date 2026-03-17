@@ -14,12 +14,13 @@ export default function ProductsPage() {
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [reindexing, setReindexing] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  const loadProducts = () => {
+  const loadProducts = (forceRefresh = false) => {
     setLoading(true);
-    fetch('/api/yandex/products?refresh=1')
+    fetch(`/api/yandex/products${forceRefresh ? '?refresh=1' : ''}`)
       .then((r) => r.json())
       .then((data) => {
         const list = Object.values(data) as Product[];
@@ -41,6 +42,25 @@ export default function ProductsPage() {
     }
   }, [searchQuery, products]);
 
+  const handleReindex = async () => {
+    setReindexing(true);
+    setAlert(null);
+    try {
+      const res = await fetch('/api/admin/reindex', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        setAlert({ type: 'success', message: data.message || 'Переиндексация завершена' });
+        loadProducts(true);
+      } else {
+        setAlert({ type: 'error', message: data.error || 'Ошибка переиндексации' });
+      }
+    } catch {
+      setAlert({ type: 'error', message: 'Ошибка переиндексации' });
+    } finally {
+      setReindexing(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!deleteTarget) return;
     const res = await fetch(`/api/yandex/delete?product=${encodeURIComponent(deleteTarget)}`, { method: 'DELETE' });
@@ -48,7 +68,7 @@ export default function ProductsPage() {
 
     if (res.ok) {
       setAlert({ type: 'success', message: data.message || `Товар "${deleteTarget}" удален` });
-      loadProducts();
+      loadProducts(true);
     } else {
       setAlert({ type: 'error', message: data.error || 'Ошибка удаления' });
     }
@@ -95,16 +115,27 @@ export default function ProductsPage() {
           </a>
         </div>
 
-        <div className="flex justify-between items-center mb-5">
+        <div className="flex flex-wrap justify-between items-center gap-2 mb-5">
           <div className="text-sm text-gray-500">
             Найдено: {filteredProducts.length} товаров
           </div>
-          <button
-            onClick={loadProducts}
-            className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-dark transition-colors border-none cursor-pointer"
-          >
-            Обновить
-          </button>
+          <div className="flex gap-2">
+            {isAuth && (
+              <button
+                onClick={handleReindex}
+                disabled={reindexing}
+                className="px-4 py-2 bg-gray-700 text-white rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50 border-none cursor-pointer"
+              >
+                {reindexing ? 'Переиндексация…' : 'Переиндексировать из Yandex'}
+              </button>
+            )}
+            <button
+              onClick={() => loadProducts(true)}
+              className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-dark transition-colors border-none cursor-pointer"
+            >
+              Обновить
+            </button>
+          </div>
         </div>
 
         {loading ? (

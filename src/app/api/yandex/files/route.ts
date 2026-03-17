@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
-import { getFiles } from '@/lib/yandex-disk';
+import { getAllFilesRecursive } from '@/lib/yandex-disk';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const namesOnly = searchParams.get('names') === '1';
   const contentType = searchParams.get('content') || '';
 
-  const items = await getFiles();
+  const items = await getAllFilesRecursive();
 
   if (namesOnly) {
     const names = items

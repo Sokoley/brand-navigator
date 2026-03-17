@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { fetchPreview } from '@/lib/yandex-disk';
+import { isAllowedYandexUrl } from '@/lib/allowed-yandex-urls';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -8,6 +9,12 @@ export async function GET(request: Request) {
   if (!url) {
     return new NextResponse(
       '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect width="200" height="200" fill="#f0f0f0"/><text x="100" y="100" text-anchor="middle" dy=".3em" font-family="Arial" font-size="14" fill="#999">Error</text></svg>',
+      { status: 400, headers: { 'Content-Type': 'image/svg+xml' } }
+    );
+  }
+  if (!isAllowedYandexUrl(url)) {
+    return new NextResponse(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200"><rect width="200" height="200" fill="#f0f0f0"/><text x="100" y="100" text-anchor="middle" dy=".3em" font-family="Arial" font-size="14" fill="#999">Invalid url</text></svg>',
       { status: 400, headers: { 'Content-Type': 'image/svg+xml' } }
     );
   }
