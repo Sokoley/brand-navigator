@@ -45,40 +45,33 @@ ADMIN_PASSWORD=ваш_надежный_пароль
 YANDEX_OAUTH_TOKEN=токен_яндекс_диска_если_нужен
 ```
 
-**Приложение в Docker и MariaDB в отдельном контейнере** (типично при EHOSTUNREACH на host.docker.internal:3310): MariaDB слушает только localhost на хосте, поэтому из контейнера приложения к ней не достучаться. Нужно подключить приложение к **той же Docker-сети**, что и контейнер MariaDB, и обращаться по **имени контейнера** и порту **3306** (внутренний порт контейнера).
+**Приложение в Docker и MariaDB в отдельном контейнере** (порт 3310 на хосте): чтобы не трогать MariaDB и не ломать другие сайты, запустите приложение в режиме **network_mode: host** — тогда оно будет использовать сеть хоста и подключаться к БД по `127.0.0.1:3310`.
 
-1. Узнайте имя контейнера MariaDB и его сеть:
+1. **Восстановить другие сайты** (если подключали MariaDB к сети приложения):
    ```bash
-   docker ps
-   docker inspect <имя_контейнера_mariadb> --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}'
+   docker network disconnect brandsmazkaru_storage-network mariadb-10.3
    ```
-   Пример имени контейнера: `mariadb-10.3` или как в выводе `docker ps` (колонка NAMES).
+   (имя сети уточните в `docker network ls`)
 
-2. В каталоге проекта создайте `docker-compose.override.yml`:
+2. В `.env` укажите БД по localhost и порту на хосте:
+   ```env
+   DATABASE_URL=mysql://логин:пароль@127.0.0.1:3310/имя_базы
+   ```
+
+3. В каталоге проекта создайте `docker-compose.override.yml`:
    ```yaml
    services:
      app:
-       networks:
-         - storage-network
-         - mariadb-network
-
-   networks:
-     mariadb-network:
-       external: true
-       name: <ИМЯ_СЕТИ_ИЗ_ШАГА_1>
+       network_mode: host
    ```
-   Подставьте вместо `<ИМЯ_СЕТИ_ИЗ_ШАГА_1>` имя сети из шага 1 (например `bridge` или имя вида `ispmanager_default`).
+   В режиме host контейнер слушает порт 3000 прямо на хосте. Убедитесь, что порт 3000 свободен для этого сайта. (В основном compose у сервиса app нет секции `networks`, чтобы не конфликтовать с `network_mode: host` в override.)
 
-3. В `.env` задайте `DATABASE_URL` с **именем контейнера** MariaDB и портом **3306**:
-   ```env
-   DATABASE_URL=mysql://логин:пароль@mariadb-10.3:3306/имя_базы
-   ```
-   (замените `mariadb-10.3` на имя из `docker ps`.)
-
-4. Перезапустите:
+4. Запустите:
    ```bash
    docker compose down && docker compose up -d
    ```
+
+Так приложение и MariaDB не объединяются в одну Docker-сеть, конфигурация MariaDB и других сайтов не меняется.
 
 **Если MariaDB установлена на хосте (не в контейнере)** и слушает 0.0.0.0:3310, в `.env` можно использовать:
 ```env

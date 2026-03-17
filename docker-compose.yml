@@ -19,9 +19,3 @@ services:
     # Доступ к сервисам на хосте (если БД не в Docker)
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    networks:
-      - storage-network
-
-networks:
-  storage-network:
-    driver: bridge
