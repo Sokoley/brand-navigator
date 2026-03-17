@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS products (
   product_group VARCHAR(500) NOT NULL DEFAULT '',
   main_photo_path VARCHAR(1000) NULL,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uk_name_group (name, product_group)
+  UNIQUE KEY uk_name_group (name(255), product_group(255))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS product_files (
@@ -70,5 +70,16 @@ export async function runSchema(): Promise<void> {
   const statements = SCHEMA_SQL.split(';').map((s) => s.trim()).filter(Boolean);
   for (const stmt of statements) {
     await p.execute(stmt);
+  }
+  // Исправить длинный уникальный ключ (max key length 3072 bytes в utf8mb4)
+  try {
+    await p.execute('ALTER TABLE products DROP INDEX uk_name_group');
+  } catch {
+    // индекс может отсутствовать или иметь другое имя
+  }
+  try {
+    await p.execute('ALTER TABLE products ADD UNIQUE KEY uk_name_group (name(255), product_group(255))');
+  } catch {
+    // уже есть нужный индекс
   }
 }
