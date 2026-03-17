@@ -45,6 +45,12 @@ ADMIN_PASSWORD=ваш_надежный_пароль
 YANDEX_OAUTH_TOKEN=токен_яндекс_диска_если_нужен
 ```
 
+**Если приложение в Docker, а MariaDB на хосте (или в другом контейнере с портом на хосте):** в `DATABASE_URL` используйте **host.docker.internal** вместо 127.0.0.1, иначе из контейнера БД недоступна:
+```env
+DATABASE_URL=mysql://логин:пароль@host.docker.internal:3310/имя_базы
+```
+(docker-compose уже добавляет `extra_hosts: host.docker.internal` для доступа к хосту.)
+
 **Сгенерировать JWT_SECRET:**
 ```bash
 openssl rand -base64 32
@@ -111,6 +117,26 @@ docker compose up -d
 ```
 
 Кратко: `docker compose down && docker compose build --no-cache && docker compose up -d`
+
+### Порт 3000 уже занят
+
+Если при `docker compose up -d` появляется ошибка **Bind for 0.0.0.0:3000 failed: port is already allocated**, порт 3000 использует другой процесс (не этот контейнер). Проверить и освободить:
+
+```bash
+# Кто слушает порт 3000
+ss -tlnp | grep 3000
+# или
+lsof -i :3000
+
+# Если это другой контейнер — остановите его (подставьте имя/ID из docker ps)
+docker ps
+docker stop <контейнер>
+
+# Если это процесс на хосте — завершите его (подставьте PID из вывода lsof/ss)
+kill <PID>
+```
+
+**Вариант: использовать другой порт на хосте.** В `docker-compose.yml` замените `"3000:3000"` на `"3001:3000"` (внутри контейнера остаётся 3000, снаружи — 3001). В Nginx в блоке `location /` укажите `proxy_pass http://127.0.0.1:3001;` и выполните `sudo nginx -t && sudo systemctl reload nginx`.
 
 ---
 
