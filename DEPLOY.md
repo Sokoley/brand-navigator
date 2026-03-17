@@ -52,15 +52,14 @@ openssl rand -base64 32
 
 ---
 
-## Шаг 3: Создание JSON файлов (если их нет)
+## Шаг 3: Создание JSON-файлов (если их нет)
 
 ```bash
-# Создать пустые файлы если их нет
+# Создать пустой файл свойств (категории, типы файлов и т.д.)
 [ ! -f custom_properties.json ] && echo '{}' > custom_properties.json
-[ ! -f products_cache.json ] && echo '{}' > products_cache.json
 
 # Установить права
-chmod 666 custom_properties.json products_cache.json
+chmod 666 custom_properties.json
 ```
 
 ---
@@ -95,6 +94,23 @@ docker compose ps
 # Посмотреть логи
 docker compose logs -f
 ```
+
+### Обновление после git pull
+
+После `git pull` образ нужно **пересобрать без кэша**, иначе Docker подставит старые слои и изменения не попадут в контейнер. Если порт 3000 занят старым контейнером — сначала остановите его:
+
+```bash
+# Остановить и удалить контейнер (освобождает порт 3000)
+docker compose down
+
+# Пересобрать образ с нуля (без кэша), чтобы подтянуть новый код
+docker compose build --no-cache
+
+# Запустить
+docker compose up -d
+```
+
+Кратко: `docker compose down && docker compose build --no-cache && docker compose up -d`
 
 ---
 

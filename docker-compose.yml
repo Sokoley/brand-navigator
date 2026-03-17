@@ -14,9 +14,8 @@ services:
     environment:
       - NODE_ENV=production
     volumes:
-      # Persist data files (для кэша и JSON файлов)
+      # Persist custom properties (справочники типов файлов и т.д.)
       - ./custom_properties.json:/app/custom_properties.json
-      - ./products_cache.json:/app/products_cache.json
     networks:
       - storage-network
 
