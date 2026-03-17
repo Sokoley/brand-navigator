@@ -45,11 +45,45 @@ ADMIN_PASSWORD=ваш_надежный_пароль
 YANDEX_OAUTH_TOKEN=токен_яндекс_диска_если_нужен
 ```
 
-**Если приложение в Docker, а MariaDB на хосте (или в другом контейнере с портом на хосте):** в `DATABASE_URL` используйте **host.docker.internal** вместо 127.0.0.1, иначе из контейнера БД недоступна:
+**Приложение в Docker и MariaDB в отдельном контейнере** (типично при EHOSTUNREACH на host.docker.internal:3310): MariaDB слушает только localhost на хосте, поэтому из контейнера приложения к ней не достучаться. Нужно подключить приложение к **той же Docker-сети**, что и контейнер MariaDB, и обращаться по **имени контейнера** и порту **3306** (внутренний порт контейнера).
+
+1. Узнайте имя контейнера MariaDB и его сеть:
+   ```bash
+   docker ps
+   docker inspect <имя_контейнера_mariadb> --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}'
+   ```
+   Пример имени контейнера: `mariadb-10.3` или как в выводе `docker ps` (колонка NAMES).
+
+2. В каталоге проекта создайте `docker-compose.override.yml`:
+   ```yaml
+   services:
+     app:
+       networks:
+         - storage-network
+         - mariadb-network
+
+   networks:
+     mariadb-network:
+       external: true
+       name: <ИМЯ_СЕТИ_ИЗ_ШАГА_1>
+   ```
+   Подставьте вместо `<ИМЯ_СЕТИ_ИЗ_ШАГА_1>` имя сети из шага 1 (например `bridge` или имя вида `ispmanager_default`).
+
+3. В `.env` задайте `DATABASE_URL` с **именем контейнера** MariaDB и портом **3306**:
+   ```env
+   DATABASE_URL=mysql://логин:пароль@mariadb-10.3:3306/имя_базы
+   ```
+   (замените `mariadb-10.3` на имя из `docker ps`.)
+
+4. Перезапустите:
+   ```bash
+   docker compose down && docker compose up -d
+   ```
+
+**Если MariaDB установлена на хосте (не в контейнере)** и слушает 0.0.0.0:3310, в `.env` можно использовать:
 ```env
 DATABASE_URL=mysql://логин:пароль@host.docker.internal:3310/имя_базы
 ```
-(docker-compose уже добавляет `extra_hosts: host.docker.internal` для доступа к хосту.)
 
 **Сгенерировать JWT_SECRET:**
 ```bash

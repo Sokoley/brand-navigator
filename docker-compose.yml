@@ -16,7 +16,7 @@ services:
     volumes:
       # Persist custom properties (справочники типов файлов и т.д.)
       - ./custom_properties.json:/app/custom_properties.json
-    # Доступ к сервисам на хосте (например MariaDB на 127.0.0.1:3310)
+    # Доступ к сервисам на хосте (если БД не в Docker)
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
