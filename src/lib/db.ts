@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS products (
   product_group VARCHAR(500) NOT NULL DEFAULT '',
   main_photo_path VARCHAR(1000) NULL,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uk_name_group (name(255), product_group(255))
+  UNIQUE KEY uk_name_group (name(191), product_group(191))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS product_files (
@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS product_files (
   file_url TEXT NULL,
   custom_properties JSON NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY uk_path (path(500)),
+  UNIQUE KEY uk_path (path(191)),
   KEY idx_product_id (product_id),
   CONSTRAINT fk_product_files_product FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -78,7 +78,18 @@ export async function runSchema(): Promise<void> {
     // индекс может отсутствовать или иметь другое имя
   }
   try {
-    await p.execute('ALTER TABLE products ADD UNIQUE KEY uk_name_group (name(255), product_group(255))');
+    await p.execute('ALTER TABLE products ADD UNIQUE KEY uk_name_group (name(191), product_group(191))');
+  } catch {
+    // уже есть нужный индекс
+  }
+  // product_files: лимит 767 байт на столбец в utf8mb4
+  try {
+    await p.execute('ALTER TABLE product_files DROP INDEX uk_path');
+  } catch {
+    // индекс может отсутствовать
+  }
+  try {
+    await p.execute('ALTER TABLE product_files ADD UNIQUE KEY uk_path (path(191))');
   } catch {
     // уже есть нужный индекс
   }
