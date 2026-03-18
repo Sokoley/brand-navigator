@@ -24,14 +24,6 @@ export default function ProductCard({
       ? getPreviewProxyUrl(fallbackPng.preview)
       : '';
 
-  const totalFiles =
-    (product.main_photo ? 1 : 0) +
-    product.photos.length +
-    product.videos.length +
-    product.documents.length +
-    product.png_files.length +
-    (product.label_files?.length ?? 0);
-
   return (
     <div className="bg-white border border-border rounded-xl p-4 md:p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
       <Link href={`/product/${encodeURIComponent(product.name)}${product.group ? `?group=${encodeURIComponent(product.group)}` : ''}`} className="no-underline text-inherit">
@@ -49,7 +41,7 @@ export default function ProductCard({
           )}
           <div className="flex-1 min-w-0">
             <div
-              className="text-base md:text-lg font-semibold mb-1 text-dark break-words"
+              className="text-sm md:text-base font-semibold mb-1 text-dark break-words"
               dangerouslySetInnerHTML={{
                 __html: searchQuery ? highlightText(product.name, searchQuery) : product.name,
               }}
@@ -78,18 +70,6 @@ export default function ProductCard({
             </div>
           </div>
         )}
-
-        <div className="flex flex-wrap gap-4 mt-4 text-xs text-gray-500">
-          <span className="flex items-center gap-1">
-            Files: {product.file_count || totalFiles}
-          </span>
-          <span className="flex items-center gap-1">
-            Кросс коды: {product.png_files?.length ?? 0}
-          </span>
-          <span className="flex items-center gap-1">
-            Этикетки: {product.label_files?.length ?? 0}
-          </span>
-        </div>
       </Link>
 
       {onDelete && (

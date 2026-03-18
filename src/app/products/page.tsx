@@ -13,10 +13,13 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedGroup, setSelectedGroup] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [reindexing, setReindexing] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const groups = Array.from(new Set(products.map((p) => p.group).filter(Boolean))).sort((a, b) => a.localeCompare(b));
 
   const loadProducts = (forceRefresh = false) => {
     setLoading(true);
@@ -35,12 +38,15 @@ export default function ProductsPage() {
   }, []);
 
   useEffect(() => {
-    if (!searchQuery.trim()) {
-      setFilteredProducts(products);
-    } else {
-      setFilteredProducts(advancedSearch(products, searchQuery));
+    let list = products;
+    if (selectedGroup) {
+      list = list.filter((p) => p.group === selectedGroup);
     }
-  }, [searchQuery, products]);
+    if (searchQuery.trim()) {
+      list = advancedSearch(list, searchQuery);
+    }
+    setFilteredProducts(list);
+  }, [searchQuery, selectedGroup, products]);
 
   const handleReindex = async () => {
     setReindexing(true);
@@ -95,6 +101,22 @@ export default function ProductsPage() {
             className="w-full px-4 md:px-5 py-3 md:py-4 border-2 border-border rounded-[25px] text-base md:text-lg outline-none transition-all focus:border-primary focus:shadow-[0_0_0_3px_rgba(157,161,168,0.1)]"
           />
         </div>
+
+        {groups.length > 0 && (
+          <div className="mb-4">
+            <span className="text-sm text-gray-600 mr-2">Группа:</span>
+            <select
+              value={selectedGroup}
+              onChange={(e) => setSelectedGroup(e.target.value)}
+              className="px-3 py-2 border border-border rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-primary/30"
+            >
+              <option value="">Все группы</option>
+              {groups.map((g) => (
+                <option key={g} value={g}>{g}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-3 mb-6">
           <a
