@@ -35,12 +35,13 @@ export function isDbConfigured(): boolean {
   return Boolean(process.env.DATABASE_URL);
 }
 
+// product_group — название группы товара (папка в Brand/Товары/{product_group}/{name}/).
 // Префиксы 191 — лимит InnoDB 767 байт/столбец (utf8mb4). ROW_FORMAT=DYNAMIC на всякий случай.
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS products (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(500) NOT NULL,
-  product_group VARCHAR(500) NOT NULL DEFAULT '',
+  product_group VARCHAR(500) NOT NULL DEFAULT '' COMMENT 'Группа товара — папка на Диске (Brand/Товары/product_group/...)',
   main_photo_path VARCHAR(1000) NULL,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uk_name_group (name(191), product_group(191))
