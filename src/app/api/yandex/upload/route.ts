@@ -117,11 +117,9 @@ export async function POST(request: Request) {
     const uploadStatus = await uploadToHref(uploadUrl, buffer);
 
     if (uploadStatus === 201 || uploadStatus === 202) {
-      // For product folders we only set SKU; product name and file type are derived from path
-      const propertiesToSet =
-        useProductFolders && productFolderPath
-          ? (properties['SKU'] ? { SKU: properties['SKU'] } : {})
-          : properties;
+      // Файлы товаров лежат в папках (Товары/Группа/Товар/Фото|Видео|...) — custom_properties на Диске не пишем
+      const skipPropsOnDisk = useProductFolders && productFolderPath;
+      const propertiesToSet = skipPropsOnDisk ? {} : properties;
 
       let propsSet = false;
       if (Object.keys(propertiesToSet).length > 0) {
@@ -138,6 +136,7 @@ export async function POST(request: Request) {
         const productName = (formData.get('productName') as string) || (formData.get('prop_0_Название товара') as string) || '';
         const productGroup = (formData.get('productGroup') as string) || '';
         const fileType = properties['Тип файла'] || 'Фото';
+        const indexProps = properties['SKU'] ? { SKU: properties['SKU'] } : {};
         try {
           const res = await getResource(diskPath);
           if (res) {
@@ -146,7 +145,7 @@ export async function POST(request: Request) {
               productName,
               productGroup,
               fileType,
-              { ...propertiesToSet, ...properties },
+              indexProps,
               {
                 name: fileName,
                 preview: res.preview || '',
@@ -161,13 +160,13 @@ export async function POST(request: Request) {
         }
       }
       results.push({
-        type: propsSet || Object.keys(propertiesToSet).length === 0 ? 'success' : 'error',
+        type: 'success',
         name: fileName,
         original: file.name,
         action,
         properties: propertiesToSet,
         properties_set: propsSet,
-        message: !propsSet && Object.keys(propertiesToSet).length > 0 ? 'File uploaded but properties were not set' : undefined,
+        message: !skipPropsOnDisk && Object.keys(propertiesToSet).length > 0 && !propsSet ? 'Файл загружен, но свойства не записались' : undefined,
       });
       existingNames.push(fileName);
     } else {
