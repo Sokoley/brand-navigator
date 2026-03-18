@@ -131,6 +131,11 @@ export default function ProductDetailPage({ params }: { params: { name: string }
     fetchFiles();
   }, [fetchFiles]);
 
+  // Группа из URL (при переходе со страницы «Товары») — подставить, если в файлах группы ещё нет
+  useEffect(() => {
+    if (groupFromUrl && !productGroup) setProductGroup(groupFromUrl);
+  }, [groupFromUrl, productGroup]);
+
   // При первой загрузке файлов открыть первую вкладку, в которой есть файлы
   const hasSetInitialTab = useRef(false);
   useEffect(() => {
@@ -228,6 +233,12 @@ export default function ProductDetailPage({ params }: { params: { name: string }
   }, [productName, fetchFiles, settingMainPhoto]);
 
   const handleUpload = useCallback(async (files: File[], fileType: string, sku?: string) => {
+    const effectiveGroup = (productGroup || groupFromUrl || '').trim();
+    if (!effectiveGroup) {
+      alert('Укажите группу товара для загрузки файлов. Перейдите к товару со страницы «Товары» по категории — группа подставится из адреса.');
+      return;
+    }
+
     setUploading(true);
     setUploadProgress({ current: 0, total: files.length });
     try {
@@ -235,24 +246,17 @@ export default function ProductDetailPage({ params }: { params: { name: string }
         const props: Record<string, string> = {
           'Название товара': productName,
           'Тип файла': fileType,
+          'Группа товаров': effectiveGroup,
         };
-        if (productGroup) props['Группа товаров'] = productGroup;
         if (sku) props['SKU'] = sku;
         return { file, properties: props };
       });
-
-      if (!productGroup.trim()) {
-        alert('Укажите группу товара для загрузки файлов. Группа определяется по загруженным файлам.');
-        setUploading(false);
-        setUploadProgress({ current: 0, total: 0 });
-        return;
-      }
 
       const { results, errorCount } = await uploadFilesWithProgress(
         entries,
         'Товар',
         (current, total) => setUploadProgress({ current, total }),
-        { productName, productGroup: productGroup || '', productSkus },
+        { productName, productGroup: effectiveGroup, productSkus },
       );
 
       if (errorCount > 0) {
@@ -266,7 +270,7 @@ export default function ProductDetailPage({ params }: { params: { name: string }
       setUploading(false);
       setUploadProgress({ current: 0, total: 0 });
     }
-  }, [productName, productGroup, productSkus, fetchFiles]);
+  }, [productName, productGroup, groupFromUrl, productSkus, fetchFiles]);
 
   const handleDownloadAll = useCallback(async () => {
     if (downloading) return;
