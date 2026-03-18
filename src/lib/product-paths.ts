@@ -10,6 +10,9 @@ export const NO_GROUP = 'Без группы';
 const FILE_TYPE_FOLDERS = ['Кросс коды', 'Фото', 'Видео', 'Этикетки', 'Документы'] as const;
 export type FileTypeFolderName = (typeof FILE_TYPE_FOLDERS)[number];
 
+/** Порядок вкладок в карточке товара (как папки на Яндексе: Фото, Видео, Документы, Кросс коды, Этикетки). */
+export const PRODUCT_TAB_FOLDERS = ['Фото', 'Видео', 'Документы', 'Кросс коды', 'Этикетки'] as const;
+
 const FILE_TYPE_TO_FOLDER: Record<string, FileTypeFolderName> = {
   'Фото': 'Фото',
   'Главное фото': 'Фото',
@@ -67,6 +70,16 @@ export function getFileTypeFolderNames(): readonly string[] {
 }
 
 /**
+ * Определяет вкладку карточки товара по пути файла и опционально по свойству «Тип файла».
+ * Используется для фильтрации: файл показывается во вкладке с тем же именем, что и папка на Диске.
+ */
+export function getFileTabFolder(diskPath: string, typeFromProps?: string): FileTypeFolderName {
+  const { fileTypeFolder } = parseProductFilePath(diskPath);
+  const type = fileTypeFolder || typeFromProps || '';
+  return getFileTypeFolder(type);
+}
+
+/**
  * Parse file path in product folder structure.
  * New: Brand/Товары/Group/Product/TypeFolder/file.ext (7+ segments)
  * Legacy: Brand/ProductName/TypeFolder/file.ext (5 segments)
@@ -77,6 +90,7 @@ export function parseProductFilePath(diskPath: string): { productName: string | 
   const toFileType = (name: string): string | null => {
     if (FILE_TYPE_FOLDERS.includes(name as FileTypeFolderName)) return name;
     if (name === 'Документ') return 'Документы'; // legacy
+    if (name === 'PNG') return 'Кросс коды'; // legacy папка
     return null;
   };
   // New: disk:, Brand, Товары, group, product, type, file => 7 segments

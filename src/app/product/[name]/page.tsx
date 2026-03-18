@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { YandexDiskItem } from '@/lib/types';
-import { parseProductFilePath } from '@/lib/product-paths';
+import { parseProductFilePath, PRODUCT_TAB_FOLDERS, getFileTabFolder } from '@/lib/product-paths';
 import { getPreviewProxyUrl, getDownloadProxyUrl, formatFileSize, formatDate, PROPERTY_COLORS, PROPERTY_DISPLAY_ORDER } from '@/lib/utils';
 import { useAuth } from '@/components/AuthProvider';
 import { uploadFilesWithProgress } from '@/lib/upload-files';
@@ -65,7 +65,6 @@ export default function ProductDetailPage({ params }: { params: { name: string }
   const [allFiles, setAllFiles] = useState<YandexDiskItem[]>([]);
   const [filteredFiles, setFilteredFiles] = useState<YandexDiskItem[]>([]);
   const [fileTypes, setFileTypes] = useState<string[]>([]);
-  const [availableFileTypes, setAvailableFileTypes] = useState<string[]>(['Кросс коды', 'Главное фото', 'Фото', 'Видео', 'Документы', 'Этикетки']);
   const [activeFilter, setActiveFilter] = useState<string>('all');
   const [selectedFile, setSelectedFile] = useState<YandexDiskItem | null>(null);
   const [productGroup, setProductGroup] = useState('');
@@ -132,32 +131,18 @@ export default function ProductDetailPage({ params }: { params: { name: string }
     fetchFiles();
   }, [fetchFiles]);
 
-  // Load available file types from properties
+  // По умолчанию открыть первую вкладку с файлами или «Фото»
   useEffect(() => {
-    fetch('/api/properties')
-      .then((r) => r.json())
-      .then((properties) => {
-        const fileTypes = properties['Тип файла'] || [];
-        if (Array.isArray(fileTypes)) {
-          setAvailableFileTypes(fileTypes);
-        }
-      })
-      .catch(() => {
-        // Fallback to default types if API fails
-        setAvailableFileTypes(['Кросс коды', 'Главное фото', 'Фото', 'Видео', 'Документы', 'Этикетки']);
-      });
-  }, []);
-
-  // Set default filter when available file types and product files are loaded
-  useEffect(() => {
-    if (availableFileTypes.length > 0 && fileTypes.length > 0 && activeFilter === 'all') {
-      // Try to default to Кросс коды (or PNG for legacy) if available
-      const crossType = availableFileTypes.find((ft) => fileTypes.includes(ft) && (ft === 'Кросс коды' || ft.toLowerCase().includes('png')));
-      if (crossType) {
-        setActiveFilter(crossType);
-      }
+    if (allFiles.length > 0 && activeFilter === 'all') {
+      const withCount = PRODUCT_TAB_FOLDERS.find((tab) =>
+        allFiles.some((f) => {
+          const contentType = f.custom_properties?.['Тип контента'] || '';
+          return contentType !== 'Макет' && getFileTabFolder(f.path, f.custom_properties?.['Тип файла']) === tab;
+        })
+      );
+      if (withCount) setActiveFilter(withCount);
     }
-  }, [availableFileTypes, fileTypes, activeFilter]);
+  }, [allFiles, activeFilter]);
 
   // Fetch marketplace images from OZON API
   useEffect(() => {
@@ -350,48 +335,30 @@ export default function ProductDetailPage({ params }: { params: { name: string }
 
   useEffect(() => {
     if (activeFilter === 'all') {
-      // Show all product files (excluding layouts)
       setFilteredFiles(
         allFiles.filter((f) => {
-          const props = f.custom_properties || {};
-          const contentType = props['Тип контента'] || '';
+          const contentType = f.custom_properties?.['Тип контента'] || '';
           return contentType !== 'Макет';
         })
       );
     } else if (activeFilter === 'Макеты') {
-      // Special tab for layouts - only for authenticated users
       if (!isAuth) {
-        // Redirect unauthorized users to 'all' filter
         setActiveFilter('all');
         setFilteredFiles([]);
         return;
       }
       setFilteredFiles(
-        allFiles.filter((f) => {
-          const props = f.custom_properties || {};
-          return props['Тип контента'] === 'Макет';
-        })
+        allFiles.filter((f) => f.custom_properties?.['Тип контента'] === 'Макет')
       );
-    } else if (activeFilter === 'Главное фото') {
-      // Special handling for main photo tab - show files marked as main photo
-      setFilteredFiles(
-        allFiles.filter((f) => {
-          const props = f.custom_properties || {};
-          return props['Главное фото'] === 'true';
-        })
-      );
+    } else if (activeFilter === 'Карточки для маркетплейсов') {
+      setFilteredFiles([]);
     } else {
-      // Show files of specific type (excluding layouts). Type from path or props.
+      // Вкладка = папка на Диске: показываем файлы из одноимённой папки
       setFilteredFiles(
         allFiles.filter((f) => {
-          const props = f.custom_properties || {};
-          const fromPath = parseProductFilePath(f.path);
-          const contentType = props['Тип контента'] || '';
-          const ft = fromPath.fileTypeFolder || props['Тип файла'] || getFileTypeFromName(f.name);
-          if (activeFilter === 'Кросс коды') {
-            return (ft === 'Кросс коды' || ft === 'PNG') && contentType !== 'Макет';
-          }
-          return ft === activeFilter && contentType !== 'Макет';
+          const contentType = f.custom_properties?.['Тип контента'] || '';
+          if (contentType === 'Макет') return false;
+          return getFileTabFolder(f.path, f.custom_properties?.['Тип файла']) === activeFilter;
         })
       );
     }
@@ -597,28 +564,22 @@ export default function ProductDetailPage({ params }: { params: { name: string }
                 >
                   Все
                 </button>
-                {availableFileTypes.filter((ft) => ft !== 'Главное фото' && ft !== 'PNG' && (ft !== 'Этикетки' || isAuth)).map((ft) => {
+                {PRODUCT_TAB_FOLDERS.map((tab) => {
                   const count = allFiles.filter((f) => {
-                    const props = f.custom_properties || {};
-                    const fromPath = parseProductFilePath(f.path);
-                    const contentType = props['Тип контента'] || '';
-                    const t = fromPath.fileTypeFolder || props['Тип файла'] || getFileTypeFromName(f.name);
-                    if (ft === 'Кросс коды') {
-                      return (t === 'Кросс коды' || t === 'PNG') && contentType !== 'Макет';
-                    }
-                    return t === ft && contentType !== 'Макет';
+                    const contentType = f.custom_properties?.['Тип контента'] || '';
+                    return contentType !== 'Макет' && getFileTabFolder(f.path, f.custom_properties?.['Тип файла']) === tab;
                   }).length;
                   return (
                     <button
-                      key={ft}
-                      onClick={() => setActiveFilter(ft)}
+                      key={tab}
+                      onClick={() => setActiveFilter(tab)}
                       className={`px-3 md:px-4 py-1.5 md:py-2 rounded-2xl cursor-pointer text-xs md:text-sm border-2 transition-all ${
-                        activeFilter === ft
+                        activeFilter === tab
                           ? 'bg-[#ff0000] text-white border-white/30'
                           : 'bg-[#edebeb] text-dark border-transparent hover:-translate-y-px hover:shadow-sm'
                       }`}
                     >
-                      {ft}{count > 0 ? ` (${count})` : ''}
+                      {tab}{count > 0 ? ` (${count})` : ''}
                     </button>
                   );
                 })}
