@@ -84,8 +84,13 @@ export default function ProductDetailPage({ params }: { params: { name: string }
   const [loadingMarketplace, setLoadingMarketplace] = useState(false);
   const [expandedSkus, setExpandedSkus] = useState<Set<string>>(new Set());
   const [downloading, setDownloading] = useState(false);
+  const [availableGroups, setAvailableGroups] = useState<string[]>([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
   const imageRef = useRef<HTMLImageElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const effectiveGroup = (productGroup || groupFromUrl || '').trim();
+  const needGroupSelection = isAuth && !effectiveGroup && !loading;
 
   const fetchFiles = useCallback(() => {
     const cacheKey = `${productName}\0${groupFromUrl ?? ''}`;
@@ -139,6 +144,20 @@ export default function ProductDetailPage({ params }: { params: { name: string }
   useEffect(() => {
     if (groupFromUrl && !productGroup) setProductGroup(groupFromUrl);
   }, [groupFromUrl, productGroup]);
+
+  // Список групп (папок в Товары на Диске) для выбора, если группа не определена
+  useEffect(() => {
+    if (!needGroupSelection || availableGroups.length > 0) return;
+    setLoadingGroups(true);
+    fetch('/api/yandex/product-groups')
+      .then((r) => r.json())
+      .then((data: { groups?: string[] }) => {
+        const list = Array.isArray(data.groups) ? data.groups : [];
+        setAvailableGroups(list);
+      })
+      .catch(() => setAvailableGroups([]))
+      .finally(() => setLoadingGroups(false));
+  }, [needGroupSelection, availableGroups.length]);
 
   // При первой загрузке файлов открыть первую вкладку, в которой есть файлы
   const hasSetInitialTab = useRef(false);
@@ -239,7 +258,7 @@ export default function ProductDetailPage({ params }: { params: { name: string }
   const handleUpload = useCallback(async (files: File[], fileType: string, sku?: string) => {
     const effectiveGroup = (productGroup || groupFromUrl || '').trim();
     if (!effectiveGroup) {
-      alert('Укажите группу товара для загрузки файлов. Перейдите к товару со страницы «Товары» по категории — группа подставится из адреса.');
+      alert('Выберите группу товара в списке ниже — это папка на Яндекс.Диске, в которой лежит папка с товаром.');
       return;
     }
 
@@ -622,7 +641,31 @@ export default function ProductDetailPage({ params }: { params: { name: string }
           {/* File list + preview */}
           <div className="flex gap-4 md:gap-5 max-w-[1440px] mx-auto px-4 md:px-8 flex-col md:flex-row">
             <div className="w-full md:w-[70%] overflow-y-auto h-[400px] md:h-[600px] border border-border p-3 md:p-4 rounded-lg bg-white">
-              {/* Upload button for authorized users in Кросс коды tab */}
+              {/* Выбор группы (папки на Диске), если не определена — для загрузки файлов */}
+              {needGroupSelection && (
+                <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-sm font-medium text-amber-900 mb-2">
+                    Группа товара — это папка на Яндекс.Диске, в которой лежит папка с этим товаром. Выберите группу для загрузки файлов:
+                  </p>
+                  {loadingGroups ? (
+                    <span className="text-sm text-amber-700">Загрузка списка групп...</span>
+                  ) : availableGroups.length === 0 ? (
+                    <span className="text-sm text-amber-700">Нет групп. Создайте папку в «Товары» на Диске или перейдите к товару со страницы «Товары».</span>
+                  ) : (
+                    <select
+                      value={productGroup}
+                      onChange={(e) => setProductGroup(e.target.value)}
+                      className="mt-1 block w-full max-w-md px-3 py-2 border border-amber-300 rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    >
+                      <option value="">— Выберите группу —</option>
+                      {availableGroups.map((g) => (
+                        <option key={g} value={g}>{g}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
+              {/* Upload button for authorized users */}
               {isAuth && activeFilter !== 'Макеты' && activeFilter !== 'Карточки для маркетплейсов' && (
                 <div className="mb-4 flex flex-col gap-3">
                   <button

@@ -194,6 +194,18 @@ export async function getProductGroupByName(productName: string): Promise<string
   return r?.product_group ?? null;
 }
 
+/** Список групп (папок в Товары на Диске). Из БД: уникальные product_group. */
+export async function getProductGroupNames(): Promise<string[]> {
+  const pool = getPool();
+  if (!pool) return [];
+  await ensureSchema();
+  const [rows] = await pool.execute(
+    'SELECT DISTINCT product_group FROM products WHERE product_group != "" ORDER BY product_group'
+  );
+  const arr = (Array.isArray(rows) ? rows : []) as { product_group: string }[];
+  return arr.map((r) => r.product_group);
+}
+
 export async function afterUpload(
   diskPath: string,
   productName: string,
