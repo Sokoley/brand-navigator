@@ -6,7 +6,7 @@ import {
   getProductFolderName,
   getFileTypeFolderNames,
 } from '@/lib/product-paths';
-import { getProductFiles } from '@/services/product-index.service';
+import { getProductFiles, getProductGroupByName } from '@/services/product-index.service';
 import { isDbConfigured } from '@/lib/db';
 import { YandexDiskItem } from '@/lib/types';
 
@@ -38,10 +38,16 @@ export async function GET(request: NextRequest) {
 
   if (isDbConfigured()) {
     const files = await getProductFiles(productName, group);
-    return NextResponse.json(files);
+    const res = NextResponse.json(files);
+    if (!group) {
+      const productGroup = await getProductGroupByName(productName);
+      if (productGroup) res.headers.set('X-Product-Group', productGroup);
+    }
+    return res;
   }
 
   let productBasePath: string;
+  let resolvedGroup: string | null = group ?? null;
   if (group) {
     const relativePath = buildProductFolderPath(productName, group);
     productBasePath = `${BRAND_BASE}/${relativePath}`;
@@ -52,6 +58,9 @@ export async function GET(request: NextRequest) {
     const productDir = await findProductInGroups(groupDirs, targetFolderName);
     if (!productDir) return NextResponse.json([]);
     productBasePath = productDir.path;
+    // Путь вида disk:/Brand/Товары/Группа/Товар — группа = 4-й сегмент (индекс 3)
+    const segments = productDir.path.split('/').filter(Boolean);
+    if (segments.length >= 4 && segments[2] === PRODUCTS_ROOT) resolvedGroup = decodeURIComponent(segments[3]);
   }
 
   const typeFolders = getFileTypeFolderNames();
@@ -64,5 +73,7 @@ export async function GET(request: NextRequest) {
       if (item.type === 'file') files.push(item);
     }
   }
-  return NextResponse.json(files);
+  const res = NextResponse.json(files);
+  if (resolvedGroup) res.headers.set('X-Product-Group', resolvedGroup);
+  return res;
 }

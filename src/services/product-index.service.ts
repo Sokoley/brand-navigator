@@ -180,6 +180,20 @@ export async function getProductFiles(productName: string, group?: string): Prom
   return list.map(fileRowToYandexItem);
 }
 
+/** Возвращает группу товара по названию (первое совпадение в индексе). Для подстановки на странице товара при отсутствии group в URL. */
+export async function getProductGroupByName(productName: string): Promise<string | null> {
+  const pool = getPool();
+  if (!pool) return null;
+  await ensureSchema();
+  const [rows] = await pool.execute(
+    'SELECT product_group FROM products WHERE name = ? LIMIT 1',
+    [productName]
+  );
+  const arr = (Array.isArray(rows) ? rows : []) as { product_group: string }[];
+  const r = arr[0];
+  return r?.product_group ?? null;
+}
+
 export async function afterUpload(
   diskPath: string,
   productName: string,

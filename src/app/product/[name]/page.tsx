@@ -108,7 +108,11 @@ export default function ProductDetailPage({ params }: { params: { name: string }
     url.searchParams.set('name', productName);
     if (groupFromUrl) url.searchParams.set('group', groupFromUrl);
     fetch(url.toString())
-      .then((r) => r.json())
+      .then((r) => {
+        const groupFromApi = r.headers.get('X-Product-Group');
+        if (groupFromApi && !groupFromUrl) setProductGroup(groupFromApi);
+        return r.json();
+      })
       .then((items: YandexDiskItem[]) => {
         const productFiles = Array.isArray(items) ? items : [];
         applyFilesToState(productFiles, setters);
