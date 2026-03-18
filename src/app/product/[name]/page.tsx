@@ -65,7 +65,7 @@ export default function ProductDetailPage({ params }: { params: { name: string }
   const [allFiles, setAllFiles] = useState<YandexDiskItem[]>([]);
   const [filteredFiles, setFilteredFiles] = useState<YandexDiskItem[]>([]);
   const [fileTypes, setFileTypes] = useState<string[]>([]);
-  const [activeFilter, setActiveFilter] = useState<string>('all');
+  const [activeFilter, setActiveFilter] = useState<string>('Фото');
   const [selectedFile, setSelectedFile] = useState<YandexDiskItem | null>(null);
   const [productGroup, setProductGroup] = useState('');
   const [productSkus, setProductSkus] = useState<string[]>([]);
@@ -131,9 +131,11 @@ export default function ProductDetailPage({ params }: { params: { name: string }
     fetchFiles();
   }, [fetchFiles]);
 
-  // По умолчанию открыть первую вкладку с файлами или «Фото»
+  // При первой загрузке файлов открыть первую вкладку, в которой есть файлы
+  const hasSetInitialTab = useRef(false);
   useEffect(() => {
-    if (allFiles.length > 0 && activeFilter === 'all') {
+    if (allFiles.length > 0 && !hasSetInitialTab.current) {
+      hasSetInitialTab.current = true;
       const withCount = PRODUCT_TAB_FOLDERS.find((tab) =>
         allFiles.some((f) => {
           const contentType = f.custom_properties?.['Тип контента'] || '';
@@ -142,7 +144,7 @@ export default function ProductDetailPage({ params }: { params: { name: string }
       );
       if (withCount) setActiveFilter(withCount);
     }
-  }, [allFiles, activeFilter]);
+  }, [allFiles]);
 
   // Fetch marketplace images from OZON API
   useEffect(() => {
@@ -334,16 +336,15 @@ export default function ProductDetailPage({ params }: { params: { name: string }
   }, [downloading, activeFilter, filteredFiles, marketplaceImages, productName]);
 
   useEffect(() => {
-    if (activeFilter === 'all') {
-      setFilteredFiles(
-        allFiles.filter((f) => {
-          const contentType = f.custom_properties?.['Тип контента'] || '';
-          return contentType !== 'Макет';
-        })
-      );
-    } else if (activeFilter === 'Макеты') {
+    if (activeFilter === 'Макеты') {
       if (!isAuth) {
-        setActiveFilter('all');
+        const fallback = PRODUCT_TAB_FOLDERS.find((tab) =>
+          allFiles.some((f) => {
+            const contentType = f.custom_properties?.['Тип контента'] || '';
+            return contentType !== 'Макет' && getFileTabFolder(f.path, f.custom_properties?.['Тип файла']) === tab;
+          })
+        );
+        setActiveFilter(fallback || 'Фото');
         setFilteredFiles([]);
         return;
       }
@@ -427,7 +428,7 @@ export default function ProductDetailPage({ params }: { params: { name: string }
         className="hidden"
         onChange={(e) => {
           const fileList = e.target.files;
-          if (!fileList?.length || activeFilter === 'all') {
+          if (!fileList?.length) {
             e.target.value = '';
             return;
           }
@@ -554,16 +555,6 @@ export default function ProductDetailPage({ params }: { params: { name: string }
           <div className="bg-white px-4 md:px-8 max-w-[1440px] mx-auto">
             <div className="mt-[60px] md:mt-[100px] mb-4 md:mb-6 py-3 md:py-4">
               <div className="flex flex-wrap gap-1.5 md:gap-2">
-                <button
-                  onClick={() => setActiveFilter('all')}
-                  className={`px-3 md:px-4 py-1.5 md:py-2 rounded-2xl cursor-pointer text-xs md:text-sm border-2 transition-all ${
-                    activeFilter === 'all'
-                      ? 'bg-[#ff0000] text-white border-white/30'
-                      : 'bg-[#edebeb] text-dark border-transparent hover:-translate-y-px hover:shadow-sm'
-                  }`}
-                >
-                  Все
-                </button>
                 {PRODUCT_TAB_FOLDERS.map((tab) => {
                   const count = allFiles.filter((f) => {
                     const contentType = f.custom_properties?.['Тип контента'] || '';
@@ -624,7 +615,7 @@ export default function ProductDetailPage({ params }: { params: { name: string }
           <div className="flex gap-4 md:gap-5 max-w-[1440px] mx-auto px-4 md:px-8 flex-col md:flex-row">
             <div className="w-full md:w-[70%] overflow-y-auto h-[400px] md:h-[600px] border border-border p-3 md:p-4 rounded-lg bg-white">
               {/* Upload button for authorized users in Кросс коды tab */}
-              {isAuth && activeFilter !== 'all' && activeFilter !== 'Макеты' && activeFilter !== 'Карточки для маркетплейсов' && (
+              {isAuth && activeFilter !== 'Макеты' && activeFilter !== 'Карточки для маркетплейсов' && (
                 <div className="mb-4 flex flex-col gap-3">
                   <button
                     onClick={() => fileInputRef.current?.click()}
