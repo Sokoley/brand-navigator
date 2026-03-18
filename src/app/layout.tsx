@@ -3,7 +3,6 @@ import { Montserrat, Manrope, Bebas_Neue } from 'next/font/google';
 import './globals.css';
 import Header from '@/components/Header';
 import AuthProvider from '@/components/AuthProvider';
-import EnsureGroupFolders from '@/components/EnsureGroupFolders';
 
 const montserrat = Montserrat({
   variable: '--font-montserrat',
@@ -38,7 +37,6 @@ export default function RootLayout({
         className={`${montserrat.variable} ${manrope.variable} ${bebasNeue.variable} antialiased mb-24`}
       >
         <AuthProvider>
-          <EnsureGroupFolders />
           <Header />
           {children}
         </AuthProvider>
