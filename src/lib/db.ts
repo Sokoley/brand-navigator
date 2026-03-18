@@ -35,6 +35,7 @@ export function isDbConfigured(): boolean {
   return Boolean(process.env.DATABASE_URL);
 }
 
+// Префиксы 191 — лимит InnoDB 767 байт/столбец (utf8mb4). ROW_FORMAT=DYNAMIC на всякий случай.
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS products (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -43,7 +44,7 @@ CREATE TABLE IF NOT EXISTS products (
   main_photo_path VARCHAR(1000) NULL,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uk_name_group (name(191), product_group(191))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB ROW_FORMAT=DYNAMIC DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS product_files (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -59,7 +60,7 @@ CREATE TABLE IF NOT EXISTS product_files (
   UNIQUE KEY uk_path (path(191)),
   KEY idx_product_id (product_id),
   CONSTRAINT fk_product_files_product FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB ROW_FORMAT=DYNAMIC DEFAULT CHARSET=utf8mb4;
 `;
 
 export async function runSchema(): Promise<void> {
@@ -71,18 +72,24 @@ export async function runSchema(): Promise<void> {
   for (const stmt of statements) {
     await p.execute(stmt);
   }
-  // Исправить длинный уникальный ключ (max key length 3072 bytes в utf8mb4)
+  // Исправить длинные ключи на существующих таблицах (max 767 байт/столбец или 3072 всего)
+  for (const table of ['products', 'product_files']) {
+    try {
+      await p.execute(`ALTER TABLE \`${table}\` ROW_FORMAT=DYNAMIC`);
+    } catch {
+      // не критично
+    }
+  }
   try {
     await p.execute('ALTER TABLE products DROP INDEX uk_name_group');
   } catch {
-    // индекс может отсутствовать или иметь другое имя
+    // индекс может отсутствовать
   }
   try {
     await p.execute('ALTER TABLE products ADD UNIQUE KEY uk_name_group (name(191), product_group(191))');
   } catch {
     // уже есть нужный индекс
   }
-  // product_files: лимит 767 байт на столбец в utf8mb4
   try {
     await p.execute('ALTER TABLE product_files DROP INDEX uk_path');
   } catch {

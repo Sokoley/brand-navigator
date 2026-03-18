@@ -165,6 +165,21 @@ kill <PID>
 
 **Вариант: использовать другой порт на хосте.** В `docker-compose.yml` замените `"3000:3000"` на `"3001:3000"` (внутри контейнера остаётся 3000, снаружи — 3001). В Nginx в блоке `location /` укажите `proxy_pass http://127.0.0.1:3001;` и выполните `sudo nginx -t && sudo systemctl reload nginx`.
 
+### Ошибка БД: «Specified key was too long; max key length is 3072 bytes»
+
+Таблицы были созданы со старыми индексами. Обновите код и пересоберите образ, затем перезапустите приложение — при первом обращении к БД выполнится миграция индексов (префиксы 191 символ). Если ошибка остаётся:
+
+1. Убедитесь, что на сервере последняя версия: `git pull`, затем `docker compose build --no-cache && docker compose down && docker compose up -d`.
+2. Либо вручную в MariaDB выполните:
+   ```sql
+   ALTER TABLE products ROW_FORMAT=DYNAMIC;
+   ALTER TABLE products DROP INDEX uk_name_group;
+   ALTER TABLE products ADD UNIQUE KEY uk_name_group (name(191), product_group(191));
+   ALTER TABLE product_files ROW_FORMAT=DYNAMIC;
+   ALTER TABLE product_files DROP INDEX uk_path;
+   ALTER TABLE product_files ADD UNIQUE KEY uk_path (path(191));
+   ```
+
 ---
 
 ## Шаг 5: Настройка Nginx
