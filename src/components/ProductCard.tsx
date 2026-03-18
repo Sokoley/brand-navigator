@@ -49,7 +49,7 @@ export default function ProductCard({
           )}
           <div className="flex-1 min-w-0">
             <div
-              className="text-base md:text-lg font-semibold mb-1 text-dark truncate"
+              className="text-base md:text-lg font-semibold mb-1 text-dark break-words"
               dangerouslySetInnerHTML={{
                 __html: searchQuery ? highlightText(product.name, searchQuery) : product.name,
               }}
