@@ -56,7 +56,6 @@ CREATE TABLE IF NOT EXISTS product_files (
   size BIGINT NULL,
   preview_url TEXT NULL,
   file_url TEXT NULL,
-  custom_properties JSON NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uk_path (path(191)),
   KEY idx_product_id (product_id),
@@ -100,5 +99,10 @@ export async function runSchema(): Promise<void> {
     await p.execute('ALTER TABLE product_files ADD UNIQUE KEY uk_path (path(191))');
   } catch {
     // уже есть нужный индекс
+  }
+  try {
+    await p.execute('ALTER TABLE product_files DROP COLUMN custom_properties');
+  } catch {
+    // столбец уже удалён или отсутствует
   }
 }

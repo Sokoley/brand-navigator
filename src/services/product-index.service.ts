@@ -24,33 +24,31 @@ interface ProductFileRow {
   size: number | null;
   preview_url: string | null;
   file_url: string | null;
-  custom_properties: string | null;
   created_at: Date;
 }
 
 function fileRowToFileInfo(row: ProductFileRow): FileInfo {
-  const props = row.custom_properties ? (JSON.parse(row.custom_properties) as Record<string, string>) : {};
   return {
     name: row.path.split('/').pop() || '',
     preview: row.preview_url || '',
     file: row.file_url || '',
     size: row.size || 0,
     created: row.created_at ? new Date(row.created_at).toISOString() : '',
-    ...props,
+    sku: row.sku || undefined,
   };
 }
 
 function fileRowToYandexItem(row: ProductFileRow): YandexDiskItem {
-  const props = row.custom_properties ? (JSON.parse(row.custom_properties) as Record<string, string>) : {};
+  const name = row.path.split('/').pop() || '';
   return {
-    name: row.path.split('/').pop() || '',
+    name,
     type: 'file',
     path: row.path,
     preview: row.preview_url || undefined,
     file: row.file_url || undefined,
     size: row.size ?? undefined,
     created: row.created_at ? new Date(row.created_at).toISOString() : undefined,
-    custom_properties: Object.keys(props).length ? props : undefined,
+    custom_properties: row.sku ? { SKU: row.sku } : undefined,
   };
 }
 
@@ -76,7 +74,7 @@ export async function getProducts(contentFilter: string = 'Товар'): Promise
   const rows = (Array.isArray(productRows) ? productRows : []) as ProductRow[];
 
   const [fileRows] = await pool.execute(
-    'SELECT id, product_id, path, file_type, sku, size, preview_url, file_url, custom_properties, created_at FROM product_files'
+    'SELECT id, product_id, path, file_type, sku, size, preview_url, file_url, created_at FROM product_files'
   );
   const files = (Array.isArray(fileRows) ? fileRows : []) as ProductFileRow[];
   const filesByProductId = new Map<number, ProductFileRow[]>();
@@ -173,7 +171,7 @@ export async function getProductFiles(productName: string, group?: string): Prom
   }
 
   const [fileRows] = await pool.execute(
-    'SELECT id, product_id, path, file_type, sku, size, preview_url, file_url, custom_properties, created_at FROM product_files WHERE product_id = ? ORDER BY created_at',
+    'SELECT id, product_id, path, file_type, sku, size, preview_url, file_url, created_at FROM product_files WHERE product_id = ? ORDER BY created_at',
     [productId]
   );
   const list = (Array.isArray(fileRows) ? fileRows : []) as ProductFileRow[];
@@ -211,7 +209,7 @@ export async function afterUpload(
   productName: string,
   productGroup: string,
   fileType: string,
-  properties: Record<string, string>,
+  sku: string | null,
   fileInfo: { name: string; preview: string; file: string; size: number; created: string }
 ): Promise<void> {
   const pool = getPool();
@@ -244,19 +242,18 @@ export async function afterUpload(
   if (!productId) return;
 
   await pool.execute(
-    `INSERT INTO product_files (product_id, path, file_type, sku, size, preview_url, file_url, custom_properties)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO product_files (product_id, path, file_type, sku, size, preview_url, file_url)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE file_type = VALUES(file_type), sku = VALUES(sku), size = VALUES(size),
-       preview_url = VALUES(preview_url), file_url = VALUES(file_url), custom_properties = VALUES(custom_properties)`,
+       preview_url = VALUES(preview_url), file_url = VALUES(file_url)`,
     [
       productId,
       diskPath,
       fileType || 'Фото',
-      properties['SKU'] || null,
+      sku,
       fileInfo.size,
       fileInfo.preview || null,
       fileInfo.file || null,
-      JSON.stringify(properties),
     ]
   );
 }
@@ -329,10 +326,10 @@ export async function fullReindex(contentFilter: string = 'Товар'): Promise
     }
 
     await pool.execute(
-      `INSERT INTO product_files (product_id, path, file_type, sku, size, preview_url, file_url, custom_properties)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO product_files (product_id, path, file_type, sku, size, preview_url, file_url)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE file_type = VALUES(file_type), sku = VALUES(sku), size = VALUES(size),
-         preview_url = VALUES(preview_url), file_url = VALUES(file_url), custom_properties = VALUES(custom_properties)`,
+         preview_url = VALUES(preview_url), file_url = VALUES(file_url)`,
       [
         productId,
         file.path,
@@ -341,7 +338,6 @@ export async function fullReindex(contentFilter: string = 'Товар'): Promise
         file.size ?? null,
         file.preview || null,
         file.file || null,
-        JSON.stringify(props),
       ]
     );
     filesInserted++;

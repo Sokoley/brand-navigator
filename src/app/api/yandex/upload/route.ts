@@ -136,17 +136,20 @@ export async function POST(request: Request) {
         const productName = (formData.get('productName') as string) || (formData.get('prop_0_Название товара') as string) || '';
         const productGroup = (formData.get('productGroup') as string) || '';
         const fileType = properties['Тип файла'] || 'Фото';
-        const sku = properties['SKU'];
-        const indexProps: Record<string, string> = sku ? { SKU: sku } : {};
+        const sku = (properties['SKU'] as string) || null;
         try {
-          const res = await getResource(diskPath);
+          let res = await getResource(diskPath);
+          if (!res?.preview && res?.file) {
+            await new Promise((r) => setTimeout(r, 2500));
+            res = await getResource(diskPath) || res;
+          }
           if (res) {
             await afterUpload(
               diskPath,
               productName,
               productGroup,
               fileType,
-              indexProps,
+              sku,
               {
                 name: fileName,
                 preview: res.preview || '',
