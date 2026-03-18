@@ -311,7 +311,7 @@ export async function fullReindex(contentFilter: string = 'Товар'): Promise
     const props = file.custom_properties || {};
     const fromPath = parseProductFilePath(file.path);
     const productName = fromPath.productName || props['Название товара'] || '';
-    const productGroup = props['Группа товаров'] || '';
+    const productGroup = (fromPath.productGroup || props['Группа товаров'] || '').trim();
     const fileType = fromPath.fileTypeFolder || props['Тип файла'] || 'Фото';
     const sku = props['SKU'] || null;
 
@@ -377,7 +377,7 @@ function buildProductsFromFiles(items: YandexDiskItem[], contentFilter: string):
     const fromPath = parseProductFilePath(file.path);
     const productName = fromPath.productName || props['Название товара'] || '';
     const sku = props['SKU'] || '';
-    const productGroup = props['Группа товаров'] || '';
+    const productGroup = (fromPath.productGroup || props['Группа товаров'] || '').trim();
     const fileType = fromPath.fileTypeFolder || props['Тип файла'] || '';
     const contentType = props['Тип контента'] || '';
     if (!productName) continue;

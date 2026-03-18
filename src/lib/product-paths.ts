@@ -84,8 +84,13 @@ export function getFileTabFolder(diskPath: string, typeFromProps?: string): File
  * New: Brand/Товары/Group/Product/TypeFolder/file.ext (7+ segments)
  * Legacy: Brand/ProductName/TypeFolder/file.ext (5 segments)
  */
-export function parseProductFilePath(diskPath: string): { productName: string | null; fileTypeFolder: string | null } {
-  if (!diskPath || !diskPath.startsWith('disk:/Brand/')) return { productName: null, fileTypeFolder: null };
+export function parseProductFilePath(diskPath: string): {
+  productName: string | null;
+  fileTypeFolder: string | null;
+  productGroup: string | null;
+} {
+  const empty = { productName: null, fileTypeFolder: null, productGroup: null };
+  if (!diskPath || !diskPath.startsWith('disk:/Brand/')) return empty;
   const segments = diskPath.split('/').filter(Boolean);
   const toFileType = (name: string): string | null => {
     if (FILE_TYPE_FOLDERS.includes(name as FileTypeFolderName)) return name;
@@ -95,15 +100,16 @@ export function parseProductFilePath(diskPath: string): { productName: string | 
   };
   // New: disk:, Brand, Товары, group, product, type, file => 7 segments
   if (segments.length >= 7 && segments[2] === PRODUCTS_ROOT) {
+    const productGroup = decodeURIComponent(segments[3]);
     const productName = decodeURIComponent(segments[4]);
     const fileTypeFolder = toFileType(segments[5]);
-    return { productName, fileTypeFolder };
+    return { productName, fileTypeFolder, productGroup };
   }
-  // Legacy: disk:, Brand, productName, fileTypeFolder, fileName => 5 segments
+  // Legacy: disk:, Brand, productName, fileTypeFolder, fileName => 5 segments (группы нет в пути)
   if (segments.length >= 5) {
     const productName = decodeURIComponent(segments[2]);
     const fileTypeFolder = toFileType(segments[3]);
-    return { productName, fileTypeFolder };
+    return { productName, fileTypeFolder, productGroup: null };
   }
-  return { productName: null, fileTypeFolder: null };
+  return empty;
 }
