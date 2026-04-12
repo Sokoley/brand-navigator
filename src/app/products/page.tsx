@@ -24,11 +24,24 @@ export default function ProductsPage() {
   const loadProducts = (forceRefresh = false) => {
     setLoading(true);
     fetch(`/api/yandex/products${forceRefresh ? '?refresh=1' : ''}`)
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (!r.ok) return {};
+        try {
+          return await r.json();
+        } catch {
+          return {};
+        }
+      })
       .then((data) => {
-        const list = Object.values(data) as Product[];
+        const raw = data && typeof data === 'object' ? data : {};
+        const list = Object.values(raw) as Product[];
         setProducts(list);
         setFilteredProducts(list);
+        setLoading(false);
+      })
+      .catch(() => {
+        setProducts([]);
+        setFilteredProducts([]);
         setLoading(false);
       });
   };

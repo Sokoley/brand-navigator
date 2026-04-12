@@ -30,9 +30,14 @@ export function escapeRegex(str: string): string {
 }
 
 export function highlightText(text: string, query: string): string {
-  if (!query) return text;
-  const regex = new RegExp(`(${escapeRegex(query)})`, 'gi');
-  return text.replace(regex, '<mark class="highlight">$1</mark>');
+  const q = (query || '').trim();
+  if (!q) return text;
+  try {
+    const regex = new RegExp(`(${escapeRegex(q)})`, 'gi');
+    return text.replace(regex, '<mark class="highlight">$1</mark>');
+  } catch {
+    return text;
+  }
 }
 
 export function getPreviewProxyUrl(previewUrl: string, size: string = 'XXXL'): string {

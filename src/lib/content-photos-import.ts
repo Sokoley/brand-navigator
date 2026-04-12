@@ -69,7 +69,7 @@ export async function listProductsFromDisk(): Promise<ContentPhotoCatalogEntry[]
   return out;
 }
 
-async function mergeSkusFromDb(entries: ContentPhotoCatalogEntry[]): Promise<ContentPhotoCatalogEntry[]> {
+export async function mergeSkusFromDb(entries: ContentPhotoCatalogEntry[]): Promise<ContentPhotoCatalogEntry[]> {
   try {
     const { getProducts } = await import('@/services/product-index.service');
     const fromDb = await getProducts('Товар');

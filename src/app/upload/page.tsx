@@ -148,12 +148,19 @@ export default function UploadPage() {
   useEffect(() => {
     // Load products list
     fetch('/api/yandex/products')
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (!r.ok) return {};
+        try {
+          return await r.json();
+        } catch {
+          return {};
+        }
+      })
       .then((productsObj) => {
-        // Convert object to array
-        const productList = Object.values(productsObj).map((p: any) => ({
-          name: p.name,
-          group: p.group,
+        const raw = productsObj && typeof productsObj === 'object' ? productsObj : {};
+        const productList = Object.values(raw as Record<string, { name?: string; group?: string }>).map((p) => ({
+          name: p.name ?? '',
+          group: p.group ?? '',
         }));
         setAvailableProducts(productList);
       })

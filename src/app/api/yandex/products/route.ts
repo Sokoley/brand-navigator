@@ -6,8 +6,19 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const contentFilter = searchParams.get('content') || 'Товар';
 
-  const products = isDbConfigured()
-    ? await getProducts(contentFilter)
-    : await getProductsFromYandex(contentFilter);
-  return NextResponse.json(products);
+  try {
+    if (isDbConfigured()) {
+      try {
+        const products = await getProducts(contentFilter);
+        return NextResponse.json(products);
+      } catch (dbErr) {
+        console.error('[api/yandex/products] ошибка БД, fallback на обход Яндекс.Диска', dbErr);
+      }
+    }
+    const products = await getProductsFromYandex(contentFilter);
+    return NextResponse.json(products);
+  } catch (err) {
+    console.error('[api/yandex/products]', err);
+    return NextResponse.json({});
+  }
 }
