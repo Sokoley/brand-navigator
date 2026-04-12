@@ -4,6 +4,11 @@ import Link from 'next/link';
 import { Product } from '@/lib/types';
 import { getPreviewProxyUrl, highlightText } from '@/lib/utils';
 
+function mainPhotoPreviewUrl(main: Product['main_photo']): string {
+  if (!main || typeof main === 'string') return '';
+  return (main.preview || '').trim();
+}
+
 export default function ProductCard({
   product,
   searchQuery,
@@ -13,13 +18,16 @@ export default function ProductCard({
   searchQuery?: string;
   onDelete?: (name: string) => void;
 }) {
-  // Preview: main photo if set, otherwise last uploaded image from Кросс коды
+  // Превью: главное фото с непустым preview; иначе PNG из Кросс кодов (с превью), новее первым
   const fallbackPng =
     product.png_files.length > 0
-      ? [...product.png_files].sort((a, b) => (b.created || '').localeCompare(a.created || ''))[0]
+      ? [...product.png_files]
+          .filter((p) => (p.preview || '').trim())
+          .sort((a, b) => (b.created || '').localeCompare(a.created || ''))[0]
       : null;
-  const mainImage = product.main_photo
-    ? getPreviewProxyUrl(typeof product.main_photo === 'string' ? '' : product.main_photo.preview)
+  const primaryPreview = mainPhotoPreviewUrl(product.main_photo);
+  const mainImage = primaryPreview
+    ? getPreviewProxyUrl(primaryPreview)
     : fallbackPng
       ? getPreviewProxyUrl(fallbackPng.preview)
       : '';

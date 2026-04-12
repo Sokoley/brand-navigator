@@ -37,7 +37,11 @@ export function highlightText(text: string, query: string): string {
 
 export function getPreviewProxyUrl(previewUrl: string, size: string = 'XXXL'): string {
   if (!previewUrl) return '';
-  const url = previewUrl.includes('size=') ? previewUrl : previewUrl + '&size=' + size;
+  let url = previewUrl;
+  if (!url.includes('size=')) {
+    const sep = url.includes('?') ? '&' : '?';
+    url = `${url}${sep}size=${size}`;
+  }
   return '/api/preview?url=' + encodeURIComponent(url);
 }
 

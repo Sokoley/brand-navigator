@@ -126,6 +126,10 @@ export async function getProducts(contentFilter: string = 'Товар'): Promise
     const mainPhotoFile = allFiles.find((f) => f.path === mainPhotoPath);
     if (!main_photo && mainPhotoFile) main_photo = fileRowToFileInfo(mainPhotoFile);
     if (!main_photo && photos.length) main_photo = photos[0];
+    if (typeof main_photo === 'object' && main_photo && !main_photo.preview) {
+      const withPreview = png_files.find((p) => p.preview) || photos.find((p) => p.preview);
+      if (withPreview) main_photo = withPreview;
+    }
 
     result[name] = {
       name,
@@ -425,6 +429,15 @@ function buildProductsFromFiles(items: YandexDiskItem[], contentFilter: string):
       } else if (isVideo) products[productName].videos!.push(fileInfo);
       else if (isDocument) products[productName].documents!.push(fileInfo);
     }
+  }
+  for (const p of Object.values(products)) {
+    const m = p.main_photo;
+    if (!m || typeof m === 'string') continue;
+    if (m.preview) continue;
+    const png = p.png_files?.find((f) => f.preview);
+    const photo = p.photos?.find((f) => f.preview);
+    if (png) p.main_photo = png;
+    else if (photo) p.main_photo = photo;
   }
   return products;
 }
