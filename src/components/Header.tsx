@@ -37,6 +37,9 @@ export default function Header() {
                 <Link href="/admin/properties" className="text-black px-4 py-2 no-underline font-medium text-sm lg:text-base lg:px-5 lg:py-2.5">
                   Свойства
                 </Link>
+                <Link href="/admin/tools" className="text-black px-4 py-2 no-underline font-medium text-sm lg:text-base lg:px-5 lg:py-2.5">
+                  Сервис
+                </Link>
                 <Link href="/admin/points" className="text-black px-4 py-2 no-underline font-medium text-sm lg:text-base lg:px-5 lg:py-2.5">
                   Точки на карте
                 </Link>
@@ -111,6 +114,13 @@ export default function Header() {
                     onClick={() => setMenuOpen(false)}
                   >
                     Свойства
+                  </Link>
+                  <Link
+                    href="/admin/tools"
+                    className="text-black px-4 py-3 no-underline font-medium rounded-lg hover:bg-gray-100"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    Сервис
                   </Link>
                   <Link
                     href="/admin/points"
