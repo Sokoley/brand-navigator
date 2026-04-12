@@ -35,10 +35,26 @@ console.error('Загрузка модуля и обход Диска…');
 
 (async () => {
   const { replaceCrossTxtWithPngFromPngFolder } = await import('../src/lib/replace-cross-png');
-  const r = await replaceCrossTxtWithPngFromPngFolder();
-  console.log(JSON.stringify(r, null, 2));
-  if (r.errors.length) {
-    console.error('Ошибки:', r.errors.slice(0, 30));
+  let offset = 0;
+  let hasMore = true;
+  const totals = { replaced: 0, pngUpdated: 0, skippedNoPng: 0 };
+  const allErrors: string[] = [];
+  while (hasMore) {
+    const r = await replaceCrossTxtWithPngFromPngFolder({ offset });
+    totals.replaced += r.replaced;
+    totals.pngUpdated += r.pngUpdated;
+    totals.skippedNoPng += r.skippedNoPng;
+    allErrors.push(...r.errors);
+    console.error(
+      `Партия offset=${r.offset}: папок ${r.processedInBatch}, txt→png ${r.replaced}, png ${r.pngUpdated}, пропусков ${r.skippedNoPng}`,
+    );
+    hasMore = r.hasMore;
+    offset = r.nextOffset;
+  }
+  const out = { ...totals, errors: allErrors, success: allErrors.length === 0 };
+  console.log(JSON.stringify(out, null, 2));
+  if (allErrors.length) {
+    console.error('Ошибки:', allErrors.slice(0, 30));
     process.exit(1);
   }
   process.exit(0);

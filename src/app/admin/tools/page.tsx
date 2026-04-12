@@ -44,6 +44,67 @@ export default function AdminToolsPage() {
     }
   };
 
+  /** PNG: цепочка запросов — по 10 папок «Кросс коды» за раз, пока не обработаны все */
+  const runPngBatches = async () => {
+    setBusy('png');
+    setAlert(null);
+    let offset = 0;
+    let sumReplaced = 0;
+    let sumPng = 0;
+    let sumSkipped = 0;
+    const errSamples: string[] = [];
+    try {
+      let hasMore = true;
+      while (hasMore) {
+        const res = await fetch('/api/yandex/replace-cross-png', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ offset }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setAlert({
+            type: 'error',
+            message: typeof data.error === 'string' ? data.error : data.message || `HTTP ${res.status}`,
+          });
+          return;
+        }
+        sumReplaced += Number(data.replaced) || 0;
+        sumPng += Number(data.pngUpdated) || 0;
+        sumSkipped += Number(data.skippedNoPng) || 0;
+        if (Array.isArray(data.errors)) {
+          for (const e of data.errors as string[]) {
+            if (errSamples.length < 15) errSamples.push(e);
+          }
+        }
+        hasMore = Boolean(data.hasMore);
+        offset = Number(data.nextOffset) || 0;
+        const lo = Number(data.offset);
+        const hi = Number(data.nextOffset);
+        const tot = Number(data.totalCrossFolders);
+        setAlert({
+          type: 'success',
+          message: `Партия папок «Кросс коды»: ${Number.isFinite(lo) && Number.isFinite(hi) ? `${lo + 1}–${hi}` : '—'} из ${Number.isFinite(tot) ? tot : '?'}. Накоплено: txt→png ${sumReplaced}, PNG ${sumPng}, пропусков ${sumSkipped}.${hasMore ? ' Дальше…' : ''}`,
+        });
+      }
+      if (errSamples.length) {
+        setAlert({
+          type: 'error',
+          message: `Завершено с ошибками (фрагмент): ${errSamples.join('; ')}. Итого txt→png ${sumReplaced}, PNG ${sumPng}, пропусков ${sumSkipped}.`,
+        });
+      } else {
+        setAlert({
+          type: 'success',
+          message: `Готово, все партии. Итого txt→png ${sumReplaced}, обновлено PNG ${sumPng}, пропусков ${sumSkipped}.`,
+        });
+      }
+    } catch (e) {
+      setAlert({ type: 'error', message: e instanceof Error ? e.message : 'Ошибка сети' });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="max-w-[1440px] mx-auto px-4 md:px-8 mt-20 md:mt-[140px] mb-20 text-center text-gray-500">
@@ -99,12 +160,13 @@ export default function AdminToolsPage() {
           <h2 className="text-lg font-semibold mb-2">Обновить PNG из Brand/PNG</h2>
           <p className="text-sm text-gray-600 mb-4">
             Скопировать одноимённые файлы из папки <code className="bg-gray-100 px-1 rounded">Brand/PNG</code> в «Кросс коды»
-            товаров: заменить плейсхолдеры .txt и перезаписать существующие .png.
+            товаров: заменить плейсхолдеры .txt и перезаписать существующие .png. Обработка идёт <strong>партиями по 10 товаров</strong> (папок
+            «Кросс коды») за запрос к серверу, кнопка сама вызывает следующие партии до конца списка.
           </p>
           <button
             type="button"
             disabled={busy !== null}
-            onClick={() => run('png', '/api/yandex/replace-cross-png')}
+            onClick={() => runPngBatches()}
             className="px-5 py-2.5 rounded-lg bg-gray-800 text-white text-sm font-medium border-none cursor-pointer hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {busy === 'png' ? 'Выполняется…' : 'Обновить PNG в кросс-кодах'}

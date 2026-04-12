@@ -3,15 +3,20 @@ import {
   deleteResource,
   downloadFileBuffer,
   getAllFilesRecursive,
-  getFilesOnlyUnderNamedFolders,
+  getFiles,
   getUploadUrl,
+  listFolderPathsByNameRecursive,
   uploadToHref,
 } from '@/lib/yandex-disk';
+import type { YandexDiskItem } from '@/lib/types';
 
 const PNG_ROOT = 'disk:/Brand/PNG';
 const PRODUCTS_ROOT = 'disk:/Brand/Товары';
 /** Имя папки на Диске (как в пути …/Кросс коды/…) */
 const CROSS_FOLDER_NAME = 'Кросс коды';
+
+/** Сколько папок «Кросс коды» (условно — товаров) за один HTTP-запрос / проход. */
+export const REPLACE_CROSS_PNG_DEFAULT_BATCH = 10;
 
 export interface ReplaceCrossPngResult {
   /** .txt заменены на .png и удалены */
@@ -21,6 +26,23 @@ export interface ReplaceCrossPngResult {
   skippedNoPng: number;
   errors: string[];
 }
+
+export interface ReplaceCrossPngOptions {
+  /** Индекс первой папки «Кросс коды» в отсортированном списке */
+  offset?: number;
+  /** Число папок за проход (по умолчанию {@link REPLACE_CROSS_PNG_DEFAULT_BATCH}) */
+  batchSize?: number;
+}
+
+export type ReplaceCrossPngBatchResult = ReplaceCrossPngResult & {
+  offset: number;
+  batchSize: number;
+  totalCrossFolders: number;
+  /** Сколько папок «Кросс коды» обработано в этой партии */
+  processedInBatch: number;
+  hasMore: boolean;
+  nextOffset: number;
+};
 
 async function copyPngToDest(pngSource: string, destPngPath: string): Promise<boolean> {
   let ok = await copyFileOnDisk(pngSource, destPngPath, true);
@@ -40,13 +62,27 @@ async function copyPngToDest(pngSource: string, destPngPath: string): Promise<bo
 /**
  * 1) Для каждого .txt в …/Кросс коды/: одноимённый .png из Brand/PNG → копия, txt удалить.
  * 2) Для каждого .png в …/Кросс коды/: если в Brand/PNG есть файл с тем же именем — перезаписать (обновить).
+ *
+ * По умолчанию за один вызов обрабатывается не больше {@link REPLACE_CROSS_PNG_DEFAULT_BATCH} папок «Кросс коды»;
+ * следующие — через повторный вызов с `offset: nextOffset`.
  */
-export async function replaceCrossTxtWithPngFromPngFolder(): Promise<ReplaceCrossPngResult> {
-  const result: ReplaceCrossPngResult = {
+export async function replaceCrossTxtWithPngFromPngFolder(
+  options?: ReplaceCrossPngOptions,
+): Promise<ReplaceCrossPngBatchResult> {
+  const offset = Math.max(0, Math.floor(options?.offset ?? 0));
+  const batchSize = Math.min(100, Math.max(1, Math.floor(options?.batchSize ?? REPLACE_CROSS_PNG_DEFAULT_BATCH)));
+
+  const result: ReplaceCrossPngBatchResult = {
     replaced: 0,
     pngUpdated: 0,
     skippedNoPng: 0,
     errors: [],
+    offset,
+    batchSize,
+    totalCrossFolders: 0,
+    processedInBatch: 0,
+    hasMore: false,
+    nextOffset: offset,
   };
 
   const pngItems = await getAllFilesRecursive(PNG_ROOT);
@@ -63,7 +99,23 @@ export async function replaceCrossTxtWithPngFromPngFolder(): Promise<ReplaceCros
     return result;
   }
 
-  const crossFiles = await getFilesOnlyUnderNamedFolders(PRODUCTS_ROOT, CROSS_FOLDER_NAME);
+  let crossFolderPaths = await listFolderPathsByNameRecursive(PRODUCTS_ROOT, CROSS_FOLDER_NAME);
+  crossFolderPaths.sort((a, b) => a.localeCompare(b));
+  result.totalCrossFolders = crossFolderPaths.length;
+
+  const batchPaths = crossFolderPaths.slice(offset, offset + batchSize);
+  result.processedInBatch = batchPaths.length;
+  result.nextOffset = offset + batchPaths.length;
+  result.hasMore = result.nextOffset < result.totalCrossFolders;
+
+  const crossFiles: YandexDiskItem[] = [];
+  for (const crossPath of batchPaths) {
+    const inner = await getFiles(crossPath, 1000);
+    for (const f of inner) {
+      if (f.type === 'file') crossFiles.push(f);
+    }
+  }
+
   const txtInCross = crossFiles.filter((f) => f.name.toLowerCase().endsWith('.txt'));
 
   for (const f of txtInCross) {
@@ -85,7 +137,6 @@ export async function replaceCrossTxtWithPngFromPngFolder(): Promise<ReplaceCros
     }
 
     const { code } = await deleteResource(f.path);
-    // 204 — обычный успех; 404 — файла уже нет (идемпотентно, после копирования/гонки)
     if (code !== 200 && code !== 204 && code !== 404) {
       result.errors.push(`PNG записан, но не удалён txt ${f.path}: HTTP ${code}`);
       continue;

@@ -124,6 +124,33 @@ export async function getFilesOnlyUnderNamedFolders(
   return files;
 }
 
+/**
+ * Собирает полные пути ко всем папкам с заданным именем под `basePath`
+ * (без захода внутрь этих папок). Дешевле, чем собирать все файлы из «Кросс коды».
+ */
+export async function listFolderPathsByNameRecursive(
+  basePath: string,
+  folderName: string,
+  previewSize: string = 'XXXL',
+): Promise<string[]> {
+  const items = await getFiles(basePath, 1000, previewSize);
+  const dirs = items.filter((i) => i.type === 'dir');
+  const paths: string[] = [];
+
+  await Promise.all(
+    dirs.map(async (dir) => {
+      if (dir.name === folderName) {
+        paths.push(dir.path);
+        return;
+      }
+      const nested = await listFolderPathsByNameRecursive(dir.path, folderName, previewSize);
+      paths.push(...nested);
+    }),
+  );
+
+  return paths;
+}
+
 export async function deleteResource(path: string): Promise<{ code: number }> {
   const url = `${YANDEX_API_BASE}?path=${encodeURIComponent(path)}`;
   const result = await yandexRequest(url, 'DELETE');
