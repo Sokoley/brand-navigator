@@ -37,11 +37,13 @@ export default function ProductCard({
       <Link href={`/product/${encodeURIComponent(product.name)}${product.group ? `?group=${encodeURIComponent(product.group)}` : ''}`} className="no-underline text-inherit">
         <div className="flex items-start gap-3 md:gap-4 mb-3 md:mb-4">
           {mainImage ? (
-            <img
-              src={mainImage}
-              alt={product.name}
-              className="w-16 h-16 md:w-20 md:h-20 rounded-lg object-cover border border-border shrink-0"
-            />
+            <div className="w-16 h-16 md:w-20 md:h-20 rounded-lg border border-border bg-gray-50 shrink-0 overflow-hidden flex items-center justify-center">
+              <img
+                src={mainImage}
+                alt={product.name}
+                className="h-full w-full object-contain"
+              />
+            </div>
           ) : (
             <div className="w-16 h-16 md:w-20 md:h-20 rounded-lg bg-gray-100 border border-border shrink-0 flex items-center justify-center text-gray-400 text-xs">
               No image
