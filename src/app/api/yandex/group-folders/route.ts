@@ -1,50 +1,16 @@
 import { NextResponse } from 'next/server';
-import { createFolder } from '@/lib/yandex-disk';
-import { loadProperties } from '@/lib/properties-manager';
-import { PRODUCTS_ROOT, getGroupFolderName } from '@/lib/product-paths';
-
-const BRAND_BASE = 'disk:/Brand';
 
 /**
- * POST: Create Товары folder and all product group folders on Yandex Disk.
- * Groups are taken from properties (Группа товаров). Idempotent: 409 = already exists.
+ * POST: раньше создавал Brand/Товары и папку под каждую «Группа товаров» из свойств.
+ * Папки групп на Яндекс.Диске не создаются автоматически (в т.ч. при перезагрузке страниц
+ * или внешних вызовах API) — структура Товары/Группа/Товар появляется только при
+ * создании товара (POST /api/yandex/product-folders) или загрузке файла (POST /api/yandex/upload).
  */
 export async function POST() {
-  const properties = loadProperties();
-  const groups = (properties['Группа товаров'] as string[]) || [];
-  if (groups.length === 0) {
-    return NextResponse.json({ success: true, message: 'No groups in properties', created: [] });
-  }
-
-  const created: string[] = [];
-  const errors: string[] = [];
-
-  const productsRootPath = `${BRAND_BASE}/${PRODUCTS_ROOT}`;
-  const rootOk = await createFolder(productsRootPath);
-  if (rootOk) created.push(PRODUCTS_ROOT);
-
-  const seen = new Set<string>();
-  for (const group of groups) {
-    const folderName = getGroupFolderName(group);
-    if (!folderName || seen.has(folderName)) continue;
-    seen.add(folderName);
-    const groupPath = `${productsRootPath}/${folderName}`;
-    const ok = await createFolder(groupPath);
-    if (ok) created.push(`${PRODUCTS_ROOT}/${folderName}`);
-    else errors.push(folderName);
-  }
-
-  if (errors.length > 0) {
-    return NextResponse.json({
-      success: true,
-      created,
-      warning: `Не удалось создать папки: ${errors.join(', ')}`,
-    });
-  }
-
   return NextResponse.json({
     success: true,
-    created,
-    message: `Создано папок: ${created.length}`,
+    created: [] as string[],
+    message:
+      'Создание папок групп отключено. Папки групп создаются вместе с товаром при «Добавить товар» или загрузке файлов.',
   });
 }
