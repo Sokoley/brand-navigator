@@ -23,6 +23,29 @@ function getFileTypeFromName(name: string): string {
   return '';
 }
 
+/** Первое PNG с превью только из папки «Кросс коды». */
+function pickDefaultMainPngFile(files: YandexDiskItem[]): YandexDiskItem | null {
+  const crossPngs = files.filter(
+    (f) =>
+      f.name.toLowerCase().endsWith('.png') &&
+      f.preview &&
+      getFileTabFolder(f.path, f.custom_properties?.['Тип файла']) === 'Кросс коды',
+  );
+  return crossPngs[0] ?? null;
+}
+
+/** Запасной кадр без PNG из других папок: первый файл с превью, который не является PNG вне «Кросс коды». */
+function pickFallbackPreviewFile(files: YandexDiskItem[]): YandexDiskItem | null {
+  for (const f of files) {
+    if (!f.preview) continue;
+    const isPng = f.name.toLowerCase().endsWith('.png');
+    const inCross = getFileTabFolder(f.path, f.custom_properties?.['Тип файла']) === 'Кросс коды';
+    if (isPng && !inCross) continue;
+    return f;
+  }
+  return null;
+}
+
 function applyFilesToState(
   productFiles: YandexDiskItem[],
   setters: {
@@ -48,13 +71,26 @@ function applyFilesToState(
     if (props['Группа товаров'] && !group) group = props['Группа товаров'];
     if (props['Главное фото'] === 'true' && f.preview) mainPreview = f.preview;
   }
-  if (!mainPreview && productFiles.length > 0 && productFiles[0].preview) mainPreview = productFiles[0].preview;
+  const mainPhotoFile = productFiles.find((f) => f.custom_properties?.['Главное фото'] === 'true');
+  let selected = mainPhotoFile ?? null;
+  if (!mainPreview) {
+    const defaultPng = pickDefaultMainPngFile(productFiles);
+    if (defaultPng?.preview) {
+      mainPreview = defaultPng.preview;
+      if (!selected) selected = defaultPng;
+    } else if (!selected) {
+      const fb = pickFallbackPreviewFile(productFiles);
+      if (fb?.preview) {
+        mainPreview = fb.preview;
+        selected = fb;
+      }
+    }
+  }
   setters.setFileTypes(Array.from(types).sort());
   setters.setProductSkus(Array.from(skus));
   setters.setProductGroup(group);
   setters.setMainPhotoPreview(mainPreview);
-  const mainPhotoFile = productFiles.find((f) => f.custom_properties?.['Главное фото'] === 'true');
-  setters.setSelectedFile(mainPhotoFile ?? null);
+  setters.setSelectedFile(selected);
 }
 
 export default function ProductDetailPage({ params }: { params: { name: string } }) {

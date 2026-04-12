@@ -3,6 +3,7 @@ import { verifyAuth } from '@/lib/auth';
 
 const PROTECTED_ROUTES = [
   { path: '/api/yandex/upload', methods: ['POST'] },
+  { path: '/api/yandex/replace-cross-png', methods: ['POST'] },
   { path: '/api/yandex/delete', methods: ['DELETE'] },
   { path: '/api/yandex/properties', methods: ['PATCH'] },
   { path: '/api/admin/reindex', methods: ['POST'] },

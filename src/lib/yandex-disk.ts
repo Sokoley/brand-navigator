@@ -99,6 +99,56 @@ export async function deleteResource(path: string): Promise<{ code: number }> {
   return { code: result.code };
 }
 
+/**
+ * Копирование файла на Диске (серверное). Для непустых папок возможен 202 + опрос операции.
+ * @see https://yandex.ru/dev/disk/api/reference/copy.html
+ */
+export async function copyFileOnDisk(
+  fromPath: string,
+  toPath: string,
+  overwrite = true,
+): Promise<boolean> {
+  const url = `${YANDEX_API_BASE}/copy?from=${encodeURIComponent(fromPath)}&path=${encodeURIComponent(toPath)}&overwrite=${overwrite}`;
+  const result = await yandexRequest(url, 'POST');
+  if (result.code === 201) return true;
+  if (result.code === 202) {
+    try {
+      const { href } = JSON.parse(result.data) as { href?: string };
+      if (href) return await pollDiskOperation(href);
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+async function pollDiskOperation(href: string, maxAttempts = 120, delayMs = 400): Promise<boolean> {
+  const token = getToken();
+  for (let i = 0; i < maxAttempts; i++) {
+    const res = await fetch(href, {
+      headers: { Authorization: 'OAuth ' + token, Accept: 'application/json' },
+    });
+    if (!res.ok) return false;
+    const data = (await res.json()) as { status?: string };
+    if (data.status === 'success') return true;
+    if (data.status === 'failure') return false;
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  return false;
+}
+
+/** Скачать файл с Диска в буфер (по пути disk:/...). */
+export async function downloadFileBuffer(filePath: string): Promise<Buffer | null> {
+  const meta = await getResource(filePath);
+  if (!meta?.file) return null;
+  const token = getToken();
+  const res = await fetch(meta.file, {
+    headers: { Authorization: 'OAuth ' + token },
+  });
+  if (!res.ok) return null;
+  return Buffer.from(await res.arrayBuffer());
+}
+
 export async function setCustomProperties(path: string, properties: Record<string, string>): Promise<boolean> {
   const url = `${YANDEX_API_BASE}?path=${encodeURIComponent(path)}`;
   const body = JSON.stringify({ custom_properties: properties });

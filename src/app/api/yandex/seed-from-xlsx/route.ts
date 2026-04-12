@@ -34,6 +34,8 @@ async function ensureFolderPath(base: string, relativePath: string): Promise<voi
 
 interface XlsxRow {
   Группа?: string;
+  /** Альтернативное имя колонки (например «Все товары.xlsx» может использовать только «Группа») */
+  'Группа товаров'?: string;
   Названия?: string;
   Название?: string;
   Артикул?: string;
@@ -69,7 +71,7 @@ export async function POST(request: NextRequest) {
     const key = (g: string, n: string) => `${g}\0${n}`;
 
     for (const row of rows) {
-      const group = (row.Группа ?? '').toString().trim();
+      const group = (row.Группа ?? row['Группа товаров'] ?? '').toString().trim();
       const name = (row.Названия ?? row.Название ?? '').toString().trim();
       const articul = (row.Артикул ?? '').toString().trim();
       const volume = (row.Объём ?? '').toString().trim();
