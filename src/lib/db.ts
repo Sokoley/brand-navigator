@@ -64,6 +64,18 @@ CREATE TABLE IF NOT EXISTS product_files (
   KEY idx_product_id (product_id),
   CONSTRAINT fk_product_files_product FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE
 ) ENGINE=InnoDB ROW_FORMAT=DYNAMIC DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS reindex_meta (
+  id TINYINT UNSIGNED PRIMARY KEY DEFAULT 1,
+  status VARCHAR(20) NOT NULL DEFAULT 'idle',
+  started_at DATETIME NULL,
+  finished_at DATETIME NULL,
+  error_message TEXT NULL,
+  products INT NULL,
+  files INT NULL
+) ENGINE=InnoDB ROW_FORMAT=DYNAMIC DEFAULT CHARSET=utf8mb4;
+
+INSERT IGNORE INTO reindex_meta (id, status) VALUES (1, 'idle');
 `;
 
 export async function runSchema(): Promise<void> {

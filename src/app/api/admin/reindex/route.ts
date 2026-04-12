@@ -1,21 +1,18 @@
 import { NextResponse } from 'next/server';
-import { runSchema } from '@/lib/db';
+import { ensureSchema, isDbConfigured } from '@/lib/db';
+import {
+  tryStartReindexJob,
+  finishReindexJob,
+  failReindexJob,
+  getReindexJob,
+} from '@/lib/reindex-job-db';
 import { fullReindex } from '@/services/product-index.service';
-import { isDbConfigured } from '@/lib/db';
 
 /**
- * POST: запуск полной переиндексации с Яндекс.Диска в MariaDB (в фоне — ответ 202, без долгого HTTP).
- * GET: статус последней операции (для опроса после POST).
+ * POST: запуск полной переиндексации (фон — 202). Состояние хранится в таблице reindex_meta (общее для воркеров).
+ * GET: статус для опроса.
  * Admin only (middleware).
  */
-
-type ReindexState =
-  | { phase: 'idle' }
-  | { phase: 'running'; startedAt: number }
-  | { phase: 'done'; result: { products: number; files: number }; finishedAt: number }
-  | { phase: 'error'; message: string; finishedAt: number };
-
-let reindexState: ReindexState = { phase: 'idle' };
 
 export async function POST(request: Request) {
   if (!isDbConfigured()) {
@@ -25,43 +22,42 @@ export async function POST(request: Request) {
     );
   }
 
-  if (reindexState.phase === 'running') {
-    return NextResponse.json(
-      { error: 'Переиндексация уже выполняется. Дождитесь завершения или обновите страницу.' },
-      { status: 409 },
-    );
-  }
-
   try {
-    await runSchema();
+    await ensureSchema();
   } catch (error) {
-    console.error('Reindex runSchema:', error);
+    console.error('Reindex ensureSchema:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Ошибка схемы БД' },
       { status: 500 },
     );
   }
 
+  let start: 'started' | 'already_running';
+  try {
+    start = await tryStartReindexJob();
+  } catch (error) {
+    console.error('Reindex tryStart:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Ошибка БД' },
+      { status: 500 },
+    );
+  }
+
+  if (start === 'already_running') {
+    return NextResponse.json(
+      { error: 'Переиндексация уже выполняется. Дождитесь завершения или обновите страницу.' },
+      { status: 409 },
+    );
+  }
+
   const { searchParams } = new URL(request.url);
   const contentFilter = searchParams.get('content') || 'Товар';
 
-  reindexState = { phase: 'running', startedAt: Date.now() };
-
   fullReindex(contentFilter)
-    .then((result) => {
-      reindexState = {
-        phase: 'done',
-        result: { products: result.products, files: result.files },
-        finishedAt: Date.now(),
-      };
-    })
+    .then((result) => finishReindexJob(result.products, result.files))
     .catch((error) => {
       console.error('Reindex error:', error);
-      reindexState = {
-        phase: 'error',
-        message: error instanceof Error ? error.message : 'Reindex failed',
-        finishedAt: Date.now(),
-      };
+      return failReindexJob(error instanceof Error ? error.message : 'Reindex failed');
     });
 
   return NextResponse.json(
@@ -76,35 +72,53 @@ export async function POST(request: Request) {
 export async function GET() {
   if (!isDbConfigured()) {
     return NextResponse.json(
-      { error: 'DATABASE_URL не задан.' },
+      { error: 'DATABASE_URL не задан.', status: 'unavailable' },
       { status: 503 },
     );
   }
 
-  switch (reindexState.phase) {
-    case 'idle':
+  try {
+    await ensureSchema();
+    const row = await getReindexJob();
+    if (!row) {
       return NextResponse.json({ status: 'idle' });
-    case 'running':
-      return NextResponse.json({
-        status: 'running',
-        startedAt: reindexState.startedAt,
-      });
-    case 'done': {
-      const { products, files } = reindexState.result;
-      return NextResponse.json({
-        status: 'done',
-        success: true,
-        message: `Reindex complete. Products: ${products}, files: ${files}`,
-        products,
-        files,
-      });
     }
-    case 'error':
-      return NextResponse.json({
+
+    switch (row.status) {
+      case 'idle':
+        return NextResponse.json({ status: 'idle' });
+      case 'running':
+        return NextResponse.json({
+          status: 'running',
+          startedAt: row.started_at ? row.started_at.getTime() : null,
+        });
+      case 'done': {
+        const products = row.products ?? 0;
+        const files = row.files ?? 0;
+        return NextResponse.json({
+          status: 'done',
+          success: true,
+          message: `Reindex complete. Products: ${products}, files: ${files}`,
+          products,
+          files,
+        });
+      }
+      case 'error':
+        return NextResponse.json({
+          status: 'error',
+          error: row.error_message || 'Ошибка переиндексации',
+        });
+      default:
+        return NextResponse.json({ status: 'idle' });
+    }
+  } catch (error) {
+    console.error('[reindex GET]', error);
+    return NextResponse.json(
+      {
         status: 'error',
-        error: reindexState.message,
-      });
-    default:
-      return NextResponse.json({ status: 'idle' });
+        error: error instanceof Error ? error.message : 'Ошибка чтения статуса из БД',
+      },
+      { status: 500 },
+    );
   }
 }

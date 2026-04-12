@@ -39,6 +39,21 @@ export async function postReindexAndPoll(
     const st = await fetch('/api/admin/reindex', { method: 'GET' });
     const j = (await st.json().catch(() => ({}))) as Record<string, unknown>;
 
+    if (!st.ok) {
+      if (st.status === 503) {
+        return {
+          ok: false,
+          message: String(
+            j.error || 'База данных недоступна (проверьте DATABASE_URL на сервере).',
+          ),
+        };
+      }
+      return {
+        ok: false,
+        message: String(j.error || `Опрос статуса: HTTP ${st.status}`),
+      };
+    }
+
     if (j.status === 'done' && j.success) {
       return {
         ok: true,
@@ -49,13 +64,6 @@ export async function postReindexAndPoll(
     }
     if (j.status === 'error') {
       return { ok: false, message: String(j.error || 'Ошибка переиндексации') };
-    }
-    if (j.status === 'idle' && i > 2) {
-      return {
-        ok: false,
-        message:
-          'Состояние переиндексации сброшено (перезапуск сервера?). Запустите снова.',
-      };
     }
   }
 
