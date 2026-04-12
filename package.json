@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "seed:yandex-xlsx": "node scripts/seed-yandex-from-xlsx.mjs",
-    "replace:cross-png": "npx tsx scripts/run-replace-cross-png.ts"
+    "replace:cross-png": "npx tsx scripts/run-replace-cross-png.ts",
+    "backfill:sku": "npx tsx scripts/run-backfill-sku.ts"
   },
   "dependencies": {
     "autoprefixer": "^10.4.23",

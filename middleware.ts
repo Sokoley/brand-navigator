@@ -7,6 +7,7 @@ const PROTECTED_ROUTES = [
   { path: '/api/yandex/delete', methods: ['DELETE'] },
   { path: '/api/yandex/properties', methods: ['PATCH'] },
   { path: '/api/admin/reindex', methods: ['POST'] },
+  { path: '/api/admin/backfill-sku', methods: ['POST'] },
   { path: '/api/properties', methods: ['POST', 'PATCH', 'DELETE'] },
   { path: '/api/points', methods: ['POST', 'PATCH', 'DELETE'] },
 ];

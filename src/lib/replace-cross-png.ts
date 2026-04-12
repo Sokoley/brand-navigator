@@ -12,18 +12,37 @@ const PRODUCTS_ROOT = 'disk:/Brand/Товары';
 const CROSS_SEGMENT = '/Кросс коды/';
 
 export interface ReplaceCrossPngResult {
+  /** .txt заменены на .png и удалены */
   replaced: number;
+  /** существующие .png в Кросс коды перезаписаны из Brand/PNG */
+  pngUpdated: number;
   skippedNoPng: number;
   errors: string[];
 }
 
+async function copyPngToDest(pngSource: string, destPngPath: string): Promise<boolean> {
+  let ok = await copyFileOnDisk(pngSource, destPngPath, true);
+  if (!ok) {
+    const buf = await downloadFileBuffer(pngSource);
+    if (buf) {
+      const href = await getUploadUrl(destPngPath, true);
+      if (href) {
+        const st = await uploadToHref(href, buf);
+        ok = st === 201 || st === 200;
+      }
+    }
+  }
+  return ok;
+}
+
 /**
- * Для каждого .txt в …/Кросс коды/ товаров: если в Brand/PNG есть одноимённый .png (имя = кросс-код),
- * копирует png в папку Кросс коды и удаляет txt.
+ * 1) Для каждого .txt в …/Кросс коды/: одноимённый .png из Brand/PNG → копия, txt удалить.
+ * 2) Для каждого .png в …/Кросс коды/: если в Brand/PNG есть файл с тем же именем — перезаписать (обновить).
  */
 export async function replaceCrossTxtWithPngFromPngFolder(): Promise<ReplaceCrossPngResult> {
   const result: ReplaceCrossPngResult = {
     replaced: 0,
+    pngUpdated: 0,
     skippedNoPng: 0,
     errors: [],
   };
@@ -61,17 +80,7 @@ export async function replaceCrossTxtWithPngFromPngFolder(): Promise<ReplaceCros
     const dir = f.path.slice(0, f.path.lastIndexOf('/'));
     const destPngPath = `${dir}/${stem}.png`;
 
-    let ok = await copyFileOnDisk(pngSource, destPngPath, true);
-    if (!ok) {
-      const buf = await downloadFileBuffer(pngSource);
-      if (buf) {
-        const href = await getUploadUrl(destPngPath, true);
-        if (href) {
-          const st = await uploadToHref(href, buf);
-          ok = st === 201 || st === 200;
-        }
-      }
-    }
+    const ok = await copyPngToDest(pngSource, destPngPath);
 
     if (!ok) {
       result.errors.push(`Не удалось записать PNG: ${destPngPath} (из ${pngSource})`);
@@ -85,6 +94,27 @@ export async function replaceCrossTxtWithPngFromPngFolder(): Promise<ReplaceCros
       continue;
     }
     result.replaced++;
+  }
+
+  const pngInCross = allUnderProducts.filter(
+    (f) =>
+      f.type === 'file' &&
+      f.name.toLowerCase().endsWith('.png') &&
+      f.path.includes(CROSS_SEGMENT),
+  );
+
+  for (const f of pngInCross) {
+    const stem = f.name.replace(/\.png$/i, '');
+    const pngSource = pngByStemLower.get(stem.toLowerCase());
+    if (!pngSource) continue;
+    if (pngSource === f.path) continue;
+
+    const ok = await copyPngToDest(pngSource, f.path);
+    if (!ok) {
+      result.errors.push(`Не удалось обновить PNG: ${f.path} (из ${pngSource})`);
+      continue;
+    }
+    result.pngUpdated++;
   }
 
   return result;
