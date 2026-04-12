@@ -23,9 +23,18 @@ ENV NEXT_PUBLIC_YANDEX_MAPS_API_KEY=$NEXT_PUBLIC_YANDEX_MAPS_API_KEY
 
 RUN npm run build
 
+# При output: 'standalone' — `next start` не подходит; кладём static/public рядом с server.js
+RUN mkdir -p .next/standalone/.next \
+  && rm -rf .next/standalone/.next/static \
+  && cp -r .next/static .next/standalone/.next/static \
+  && rm -rf .next/standalone/public \
+  && cp -r public .next/standalone/public
+
+WORKDIR /app/.next/standalone
+
 EXPOSE 3000
 
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["npm", "start"]
+CMD ["node", "server.js"]

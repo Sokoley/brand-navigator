@@ -13,6 +13,9 @@ export function getPool(): mysql.Pool | null {
       waitForConnections: true,
       connectionLimit: 10,
       queueLimit: 0,
+      /** Реже отваливается с PROTOCOL_CONNECTION_LOST за NAT / долгим idle на сервере БД */
+      enableKeepAlive: true,
+      keepAliveInitialDelay: 10000,
     });
     return pool;
   } catch {
