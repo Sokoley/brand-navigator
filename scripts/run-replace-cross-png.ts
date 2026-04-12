@@ -1,6 +1,11 @@
 /**
  * Запуск замены .txt на .png из Brand/PNG (обходит HTTP-авторизацию).
- * Использование: npx tsx scripts/run-replace-cross-png.ts
+ *
+ * Использование:
+ *   npx tsx scripts/run-replace-cross-png.ts
+ *   npx tsx scripts/run-replace-cross-png.ts 80          — продолжить с 80-й папки «Кросс коды» (индекс в отсортированном списке)
+ *   npx tsx scripts/run-replace-cross-png.ts --offset=80
+ *   npm run replace:cross-png -- 80
  */
 import fs from 'fs';
 import path from 'path';
@@ -31,11 +36,34 @@ function loadEnvFiles() {
 }
 
 loadEnvFiles();
+
+function parseInitialOffset(): number {
+  const argv = process.argv.slice(2);
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--offset' && argv[i + 1] !== undefined) {
+      const n = Number(argv[i + 1]);
+      if (Number.isFinite(n) && n >= 0) return Math.floor(n);
+    }
+    if (a.startsWith('--offset=')) {
+      const n = Number(a.slice('--offset='.length));
+      if (Number.isFinite(n) && n >= 0) return Math.floor(n);
+    }
+  }
+  const positional = argv.find((x) => /^\d+$/.test(x));
+  if (positional !== undefined) return Number(positional);
+  return 0;
+}
+
+const initialOffset = parseInitialOffset();
 console.error('Загрузка модуля и обход Диска…');
+if (initialOffset > 0) {
+  console.error(`Старт с offset=${initialOffset} (продолжение после обрыва или выборочный прогон).`);
+}
 
 (async () => {
   const { replaceCrossTxtWithPngFromPngFolder } = await import('../src/lib/replace-cross-png');
-  let offset = 0;
+  let offset = initialOffset;
   let hasMore = true;
   const totals = { replaced: 0, pngUpdated: 0, skippedNoPng: 0 };
   const allErrors: string[] = [];
