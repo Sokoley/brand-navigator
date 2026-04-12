@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/components/AuthProvider';
+import { postReindexAndPoll } from '@/lib/admin-reindex-client';
 
 type ActionId = 'sku' | 'png' | 'reindex' | 'content' | 'deleteFotos';
 
@@ -106,6 +107,22 @@ export default function AdminToolsPage() {
       });
     } catch (e) {
       setAlert({ type: 'error', message: e instanceof Error ? e.message : 'Ошибка сети' });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const runReindex = async () => {
+    setBusy('reindex');
+    setAlert(null);
+    try {
+      const r = await postReindexAndPoll();
+      setAlert({
+        type: r.ok ? 'success' : 'error',
+        message: r.message,
+      });
+    } catch (e) {
+      setAlert({ type: 'error', message: e instanceof Error ? e.message : 'Ошибка' });
     } finally {
       setBusy(null);
     }
@@ -276,7 +293,7 @@ export default function AdminToolsPage() {
           <button
             type="button"
             disabled={busy !== null}
-            onClick={() => run('reindex', '/api/admin/reindex')}
+            onClick={() => runReindex()}
             className="px-5 py-2.5 rounded-lg border-2 border-border bg-white text-dark text-sm font-medium cursor-pointer hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {busy === 'reindex' ? 'Выполняется…' : 'Переиндексировать'}

@@ -6,7 +6,7 @@ const PROTECTED_ROUTES = [
   { path: '/api/yandex/replace-cross-png', methods: ['POST'] },
   { path: '/api/yandex/delete', methods: ['DELETE'] },
   { path: '/api/yandex/properties', methods: ['PATCH'] },
-  { path: '/api/admin/reindex', methods: ['POST'] },
+  { path: '/api/admin/reindex', methods: ['POST', 'GET'] },
   { path: '/api/admin/backfill-sku', methods: ['POST'] },
   { path: '/api/admin/import-content-photos', methods: ['POST'] },
   { path: '/api/admin/delete-product-fotos', methods: ['POST'] },

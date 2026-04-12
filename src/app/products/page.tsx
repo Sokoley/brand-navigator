@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Product } from '@/lib/types';
 import { advancedSearch } from '@/lib/search';
+import { postReindexAndPoll } from '@/lib/admin-reindex-client';
 import { useAuth } from '@/components/AuthProvider';
 import ProductCard from '@/components/ProductCard';
 import ConfirmDialog from '@/components/ConfirmDialog';
@@ -65,16 +66,18 @@ export default function ProductsPage() {
     setReindexing(true);
     setAlert(null);
     try {
-      const res = await fetch('/api/admin/reindex', { method: 'POST' });
-      const data = await res.json();
-      if (res.ok) {
-        setAlert({ type: 'success', message: data.message || 'Переиндексация завершена' });
+      const r = await postReindexAndPoll();
+      if (r.ok) {
+        setAlert({ type: 'success', message: r.message });
         loadProducts(true);
       } else {
-        setAlert({ type: 'error', message: data.error || 'Ошибка переиндексации' });
+        setAlert({ type: 'error', message: r.message });
       }
-    } catch {
-      setAlert({ type: 'error', message: 'Ошибка переиндексации' });
+    } catch (e) {
+      setAlert({
+        type: 'error',
+        message: e instanceof Error ? e.message : 'Ошибка переиндексации',
+      });
     } finally {
       setReindexing(false);
     }
