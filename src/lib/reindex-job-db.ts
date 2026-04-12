@@ -4,7 +4,7 @@
  */
 
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
-import { getPool } from '@/lib/db';
+import { getPool, executeWithRetry } from '@/lib/db';
 
 const STALE_RUNNING_HOURS = 4;
 
@@ -19,9 +19,8 @@ export type ReindexJobRow = {
 
 /** Сброс «зависшего» running (после падения процесса и т.п.). */
 export async function resetStaleRunningJob(): Promise<void> {
-  const p = getPool();
-  if (!p) return;
-  await p.execute(
+  if (!getPool()) return;
+  await executeWithRetry(
     `UPDATE reindex_meta
      SET status = 'error',
          finished_at = UTC_TIMESTAMP(),
@@ -37,12 +36,11 @@ export async function resetStaleRunningJob(): Promise<void> {
  * Пытается перевести задачу в running. Возвращает started | already_running.
  */
 export async function tryStartReindexJob(): Promise<'started' | 'already_running'> {
-  const p = getPool();
-  if (!p) throw new Error('Нет подключения к БД');
+  if (!getPool()) throw new Error('Нет подключения к БД');
 
   await resetStaleRunningJob();
 
-  const [r] = await p.execute<ResultSetHeader>(
+  const [r] = await executeWithRetry(
     `UPDATE reindex_meta SET
        status = 'running',
        started_at = UTC_TIMESTAMP(),
@@ -58,9 +56,8 @@ export async function tryStartReindexJob(): Promise<'started' | 'already_running
 }
 
 export async function finishReindexJob(products: number, files: number): Promise<void> {
-  const p = getPool();
-  if (!p) return;
-  await p.execute(
+  if (!getPool()) return;
+  await executeWithRetry(
     `UPDATE reindex_meta
      SET status = 'done',
          finished_at = UTC_TIMESTAMP(),
@@ -73,10 +70,9 @@ export async function finishReindexJob(products: number, files: number): Promise
 }
 
 export async function failReindexJob(message: string): Promise<void> {
-  const p = getPool();
-  if (!p) return;
+  if (!getPool()) return;
   const msg = message.slice(0, 60000);
-  await p.execute(
+  await executeWithRetry(
     `UPDATE reindex_meta
      SET status = 'error',
          finished_at = UTC_TIMESTAMP(),
@@ -87,13 +83,13 @@ export async function failReindexJob(message: string): Promise<void> {
 }
 
 export async function getReindexJob(): Promise<ReindexJobRow | null> {
-  const p = getPool();
-  if (!p) return null;
-  const [rows] = await p.execute<RowDataPacket[]>(
+  if (!getPool()) return null;
+  const [rows] = await executeWithRetry(
     `SELECT status, started_at, finished_at, error_message, products, files
      FROM reindex_meta WHERE id = 1`,
   );
-  const row = rows[0];
+  const list = Array.isArray(rows) ? rows : [];
+  const row = list[0] as RowDataPacket | undefined;
   if (!row) return null;
   return {
     status: String(row.status) as ReindexJobRow['status'],

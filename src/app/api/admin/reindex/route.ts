@@ -54,10 +54,16 @@ export async function POST(request: Request) {
   const contentFilter = searchParams.get('content') || 'Товар';
 
   fullReindex(contentFilter)
-    .then((result) => finishReindexJob(result.products, result.files))
+    .then((result) =>
+      finishReindexJob(result.products, result.files).catch((e) =>
+        console.error('finishReindexJob:', e),
+      ),
+    )
     .catch((error) => {
       console.error('Reindex error:', error);
-      return failReindexJob(error instanceof Error ? error.message : 'Reindex failed');
+      void failReindexJob(error instanceof Error ? error.message : 'Reindex failed').catch((e) =>
+        console.error('failReindexJob:', e),
+      );
     });
 
   return NextResponse.json(

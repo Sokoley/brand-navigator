@@ -1,4 +1,4 @@
-import { getPool, ensureSchema } from '@/lib/db';
+import { getPool, ensureSchema, executeWithRetry } from '@/lib/db';
 import { addSKU } from '@/lib/properties-manager';
 
 const CROSS_MARKER = '/Кросс коды/';
@@ -38,7 +38,7 @@ export async function backfillSkuFromCrossFilenames(): Promise<BackfillSkuResult
 
   const result: BackfillSkuResult = { updated: 0, skipped: 0, errors: [] };
 
-  const [rows] = await pool.execute(
+  const [rows] = await executeWithRetry(
     `SELECT id, path, sku FROM product_files WHERE path LIKE ?`,
     [`%${CROSS_MARKER}%`]
   );
@@ -59,7 +59,7 @@ export async function backfillSkuFromCrossFilenames(): Promise<BackfillSkuResult
     }
 
     try {
-      await pool.execute('UPDATE product_files SET sku = ? WHERE id = ?', [stem, row.id]);
+      await executeWithRetry('UPDATE product_files SET sku = ? WHERE id = ?', [stem, row.id]);
       result.updated++;
       if (!addedSkus.has(stem)) {
         addSKU(stem);

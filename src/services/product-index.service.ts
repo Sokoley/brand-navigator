@@ -1,4 +1,4 @@
-import { getPool, ensureSchema } from '@/lib/db';
+import { getPool, ensureSchema, executeWithRetry } from '@/lib/db';
 import { getAllFilesRecursive, getResource } from '@/lib/yandex-disk';
 import { parseProductFilePath } from '@/lib/product-paths';
 import { addProductName, addSKU } from '@/lib/properties-manager';
@@ -63,17 +63,16 @@ function mapFileTypeToCategory(fileType: string): keyof Pick<Product, 'photos' |
 }
 
 export async function getProducts(contentFilter: string = 'Товар'): Promise<Record<string, Product>> {
-  const pool = getPool();
-  if (!pool) return {};
+  if (!getPool()) return {};
 
   await ensureSchema();
 
-  const [productRows] = await pool.execute(
+  const [productRows] = await executeWithRetry(
     'SELECT id, name, product_group, main_photo_path, updated_at FROM products ORDER BY name, product_group'
   );
   const rows = (Array.isArray(productRows) ? productRows : []) as ProductRow[];
 
-  const [fileRows] = await pool.execute(
+  const [fileRows] = await executeWithRetry(
     'SELECT id, product_id, path, file_type, sku, size, preview_url, file_url, created_at FROM product_files'
   );
   const files = (Array.isArray(fileRows) ? fileRows : []) as ProductFileRow[];
@@ -148,14 +147,13 @@ export async function getProducts(contentFilter: string = 'Товар'): Promise
 }
 
 export async function getProductFiles(productName: string, group?: string): Promise<YandexDiskItem[]> {
-  const pool = getPool();
-  if (!pool) return [];
+  if (!getPool()) return [];
 
   await ensureSchema();
 
   let productId: number;
   if (group !== undefined && group !== null && group !== '') {
-    const [rows] = await pool.execute(
+    const [rows] = await executeWithRetry(
       'SELECT id FROM products WHERE name = ? AND product_group = ? LIMIT 1',
       [productName, group]
     );
@@ -164,7 +162,7 @@ export async function getProductFiles(productName: string, group?: string): Prom
     if (!r) return [];
     productId = r.id;
   } else {
-    const [rows] = await pool.execute(
+    const [rows] = await executeWithRetry(
       'SELECT id FROM products WHERE name = ? LIMIT 1',
       [productName]
     );
@@ -174,7 +172,7 @@ export async function getProductFiles(productName: string, group?: string): Prom
     productId = r.id;
   }
 
-  const [fileRows] = await pool.execute(
+  const [fileRows] = await executeWithRetry(
     'SELECT id, product_id, path, file_type, sku, size, preview_url, file_url, created_at FROM product_files WHERE product_id = ? ORDER BY created_at',
     [productId]
   );
@@ -184,10 +182,9 @@ export async function getProductFiles(productName: string, group?: string): Prom
 
 /** Возвращает группу товара по названию (первое совпадение в индексе). Для подстановки на странице товара при отсутствии group в URL. */
 export async function getProductGroupByName(productName: string): Promise<string | null> {
-  const pool = getPool();
-  if (!pool) return null;
+  if (!getPool()) return null;
   await ensureSchema();
-  const [rows] = await pool.execute(
+  const [rows] = await executeWithRetry(
     'SELECT product_group FROM products WHERE name = ? LIMIT 1',
     [productName]
   );
@@ -198,10 +195,9 @@ export async function getProductGroupByName(productName: string): Promise<string
 
 /** Список групп (папок в Товары на Диске). Из БД: уникальные product_group. */
 export async function getProductGroupNames(): Promise<string[]> {
-  const pool = getPool();
-  if (!pool) return [];
+  if (!getPool()) return [];
   await ensureSchema();
-  const [rows] = await pool.execute(
+  const [rows] = await executeWithRetry(
     'SELECT DISTINCT product_group FROM products WHERE product_group != "" ORDER BY product_group'
   );
   const arr = (Array.isArray(rows) ? rows : []) as { product_group: string }[];
@@ -216,10 +212,9 @@ export async function afterUpload(
   sku: string | null,
   fileInfo: { name: string; preview: string; file: string; size: number; created: string }
 ): Promise<void> {
-  const pool = getPool();
-  if (!pool) return;
+  if (!getPool()) return;
 
-  const [existing] = await pool.execute(
+  const [existing] = await executeWithRetry(
     'SELECT id FROM products WHERE name = ? AND product_group = ? LIMIT 1',
     [productName, productGroup]
   );
@@ -228,14 +223,14 @@ export async function afterUpload(
   if (existingRows.length > 0) {
     productId = existingRows[0].id;
   } else {
-    const [ins] = await pool.execute('INSERT INTO products (name, product_group) VALUES (?, ?)', [
+    const [ins] = await executeWithRetry('INSERT INTO products (name, product_group) VALUES (?, ?)', [
       productName,
       productGroup,
     ]);
     const header = ins as { insertId?: number };
     productId = header.insertId ?? 0;
     if (!productId) {
-      const [r] = await pool.execute(
+      const [r] = await executeWithRetry(
         'SELECT id FROM products WHERE name = ? AND product_group = ? LIMIT 1',
         [productName, productGroup]
       );
@@ -245,7 +240,7 @@ export async function afterUpload(
   }
   if (!productId) return;
 
-  await pool.execute(
+  await executeWithRetry(
     `INSERT INTO product_files (product_id, path, file_type, sku, size, preview_url, file_url)
      VALUES (?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE file_type = VALUES(file_type), sku = VALUES(sku), size = VALUES(size),
@@ -263,21 +258,18 @@ export async function afterUpload(
 }
 
 export async function afterDeleteFile(path: string): Promise<void> {
-  const pool = getPool();
-  if (!pool) return;
-  await pool.execute('DELETE FROM product_files WHERE path = ?', [path]);
+  if (!getPool()) return;
+  await executeWithRetry('DELETE FROM product_files WHERE path = ?', [path]);
 }
 
 export async function afterDeleteProduct(productName: string): Promise<void> {
-  const pool = getPool();
-  if (!pool) return;
-  await pool.execute('DELETE FROM products WHERE name = ?', [productName]);
+  if (!getPool()) return;
+  await executeWithRetry('DELETE FROM products WHERE name = ?', [productName]);
 }
 
 export async function setMainPhoto(productName: string, filePath: string): Promise<void> {
-  const pool = getPool();
-  if (!pool) return;
-  await pool.execute(
+  if (!getPool()) return;
+  await executeWithRetry(
     'UPDATE products p INNER JOIN product_files f ON f.product_id = p.id SET p.main_photo_path = f.path WHERE f.path = ? AND p.name = ?',
     [filePath, productName]
   );
@@ -293,13 +285,12 @@ function isProductFile(item: YandexDiskItem, contentFilter: string): boolean {
 }
 
 export async function fullReindex(contentFilter: string = 'Товар'): Promise<{ products: number; files: number }> {
-  const pool = getPool();
-  if (!pool) throw new Error('DATABASE_URL is not set');
+  if (!getPool()) throw new Error('DATABASE_URL is not set');
 
-  await pool.execute('SET FOREIGN_KEY_CHECKS = 0');
-  await pool.execute('TRUNCATE TABLE product_files');
-  await pool.execute('TRUNCATE TABLE products');
-  await pool.execute('SET FOREIGN_KEY_CHECKS = 1');
+  await executeWithRetry('SET FOREIGN_KEY_CHECKS = 0');
+  await executeWithRetry('TRUNCATE TABLE product_files');
+  await executeWithRetry('TRUNCATE TABLE products');
+  await executeWithRetry('SET FOREIGN_KEY_CHECKS = 1');
 
   const items = await getAllFilesRecursive(BRAND_BASE);
   const productFiles = items.filter((it) => isProductFile(it, contentFilter));
@@ -321,7 +312,7 @@ export async function fullReindex(contentFilter: string = 'Товар'): Promise
     const key = `${productName}\0${productGroup}`;
     let productId = productKeys.get(key);
     if (productId == null) {
-      const [ins] = await pool.execute('INSERT INTO products (name, product_group) VALUES (?, ?)', [
+      const [ins] = await executeWithRetry('INSERT INTO products (name, product_group) VALUES (?, ?)', [
         productName,
         productGroup,
       ]);
@@ -329,7 +320,7 @@ export async function fullReindex(contentFilter: string = 'Товар'): Promise
       productKeys.set(key, productId);
     }
 
-    await pool.execute(
+    await executeWithRetry(
       `INSERT INTO product_files (product_id, path, file_type, sku, size, preview_url, file_url)
        VALUES (?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE file_type = VALUES(file_type), sku = VALUES(sku), size = VALUES(size),
@@ -351,18 +342,18 @@ export async function fullReindex(contentFilter: string = 'Товар'): Promise
   }
 
   for (const [productId, mainPath] of mainPhotoByProductId) {
-    await pool.execute('UPDATE products SET main_photo_path = ? WHERE id = ?', [mainPath, productId]);
+    await executeWithRetry('UPDATE products SET main_photo_path = ? WHERE id = ?', [mainPath, productId]);
   }
   for (const [, productId] of productKeys) {
     if (mainPhotoByProductId.has(productId)) continue;
-    const [rows] = await pool.execute(
+    const [rows] = await executeWithRetry(
       'SELECT path FROM product_files WHERE product_id = ? ORDER BY id LIMIT 1',
       [productId]
     );
     const paths = (Array.isArray(rows) ? rows : []) as { path: string }[];
     const fallbackPath = paths[0]?.path;
     if (fallbackPath) {
-      await pool.execute('UPDATE products SET main_photo_path = ? WHERE id = ?', [fallbackPath, productId]);
+      await executeWithRetry('UPDATE products SET main_photo_path = ? WHERE id = ?', [fallbackPath, productId]);
     }
   }
 
