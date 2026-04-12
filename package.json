@@ -9,6 +9,8 @@
     "lint": "eslint",
     "seed:yandex-xlsx": "node scripts/seed-yandex-from-xlsx.mjs",
     "replace:cross-png": "npx tsx scripts/run-replace-cross-png.ts",
+    "import:content-photos": "npx tsx scripts/import-content-photos.ts",
+    "delete:product-fotos": "npx tsx scripts/delete-product-fotos.ts",
     "backfill:sku": "node scripts/backfill-sku.mjs"
   },
   "dependencies": {

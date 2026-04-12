@@ -8,6 +8,8 @@ const PROTECTED_ROUTES = [
   { path: '/api/yandex/properties', methods: ['PATCH'] },
   { path: '/api/admin/reindex', methods: ['POST'] },
   { path: '/api/admin/backfill-sku', methods: ['POST'] },
+  { path: '/api/admin/import-content-photos', methods: ['POST'] },
+  { path: '/api/admin/delete-product-fotos', methods: ['POST'] },
   { path: '/api/properties', methods: ['POST', 'PATCH', 'DELETE'] },
   { path: '/api/points', methods: ['POST', 'PATCH', 'DELETE'] },
 ];

@@ -27,25 +27,11 @@ async function findProductInGroups(
   return null;
 }
 
-export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const productName = searchParams.get('name')?.trim();
-  const group = searchParams.get('group')?.trim() ?? undefined;
-
-  if (!productName) {
-    return NextResponse.json({ error: 'Укажите name (название товара)' }, { status: 400 });
-  }
-
-  if (isDbConfigured()) {
-    const files = await getProductFiles(productName, group);
-    const res = NextResponse.json(files);
-    if (!group) {
-      const productGroup = await getProductGroupByName(productName);
-      if (productGroup) res.headers.set('X-Product-Group', productGroup);
-    }
-    return res;
-  }
-
+/** Список файлов товара с Яндекс.Диска (без БД). */
+async function listProductFilesFromYandexDisk(
+  productName: string,
+  group?: string,
+): Promise<{ files: YandexDiskItem[]; resolvedGroup: string | null }> {
   let productBasePath: string;
   let resolvedGroup: string | null = group ?? null;
   if (group) {
@@ -56,7 +42,7 @@ export async function GET(request: NextRequest) {
     const groupDirs = groupItems.filter((i) => i.type === 'dir');
     const targetFolderName = getProductFolderName(productName);
     const productDir = await findProductInGroups(groupDirs, targetFolderName);
-    if (!productDir) return NextResponse.json([]);
+    if (!productDir) return { files: [], resolvedGroup: null };
     productBasePath = productDir.path;
     // Путь вида disk:/Brand/Товары/Группа/Товар — группа = 4-й сегмент (индекс 3)
     const segments = productDir.path.split('/').filter(Boolean);
@@ -73,7 +59,43 @@ export async function GET(request: NextRequest) {
       if (item.type === 'file') files.push(item);
     }
   }
-  const res = NextResponse.json(files);
-  if (resolvedGroup) res.headers.set('X-Product-Group', resolvedGroup);
-  return res;
+  return { files, resolvedGroup };
+}
+
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const productName = searchParams.get('name')?.trim();
+  const group = searchParams.get('group')?.trim() ?? undefined;
+
+  if (!productName) {
+    return NextResponse.json({ error: 'Укажите name (название товара)' }, { status: 400 });
+  }
+
+  try {
+    if (isDbConfigured()) {
+      try {
+        const files = await getProductFiles(productName, group);
+        const res = NextResponse.json(files);
+        if (!group) {
+          try {
+            const productGroup = await getProductGroupByName(productName);
+            if (productGroup) res.headers.set('X-Product-Group', productGroup);
+          } catch (headerErr) {
+            console.error('[product-files] getProductGroupByName', headerErr);
+          }
+        }
+        return res;
+      } catch (dbErr) {
+        console.error('[product-files] БД недоступна или ошибка запроса, fallback на API Диска', dbErr);
+      }
+    }
+
+    const { files, resolvedGroup } = await listProductFilesFromYandexDisk(productName, group);
+    const res = NextResponse.json(files);
+    if (resolvedGroup) res.headers.set('X-Product-Group', resolvedGroup);
+    return res;
+  } catch (err) {
+    console.error('[product-files]', err);
+    return NextResponse.json([]);
+  }
 }

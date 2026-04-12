@@ -39,24 +39,52 @@ export async function yandexRequest(
   return { code: response.status, data };
 }
 
-export async function getFiles(path: string = 'disk:/Brand', limit: number = 1000, previewSize: string = 'XXXL'): Promise<YandexDiskItem[]> {
-  const url = `${YANDEX_API_BASE}?path=${encodeURIComponent(path)}&limit=${limit}&preview_size=${previewSize}`;
+export async function getFiles(
+  path: string = 'disk:/Brand',
+  limit: number = 1000,
+  previewSize: string = 'XXXL',
+  offset: number = 0,
+): Promise<YandexDiskItem[]> {
+  const url = `${YANDEX_API_BASE}?path=${encodeURIComponent(path)}&limit=${limit}&offset=${offset}&preview_size=${previewSize}`;
   const result = await yandexRequest(url);
 
-  if (result.code === 200) {
-    const data: YandexDiskResponse = JSON.parse(result.data);
-    return data._embedded?.items || [];
+  if (result.code === 200 && result.data) {
+    try {
+      const data: YandexDiskResponse = JSON.parse(result.data);
+      return data._embedded?.items || [];
+    } catch {
+      return [];
+    }
   }
   return [];
+}
+
+/** Все файлы непосредственно в папке (с пагинацией, если больше лимита листинга). */
+export async function listAllFilesInFolder(folderPath: string, previewSize: string = 'XXXL'): Promise<YandexDiskItem[]> {
+  const out: YandexDiskItem[] = [];
+  let offset = 0;
+  const limit = 1000;
+  while (true) {
+    const batch = await getFiles(folderPath, limit, previewSize, offset);
+    for (const it of batch) {
+      if (it.type === 'file') out.push(it);
+    }
+    if (batch.length < limit) break;
+    offset += limit;
+  }
+  return out;
 }
 
 /** Get single resource (file or dir) by path. Returns item with file, preview URLs. */
 export async function getResource(path: string, previewSize: string = 'XXXL'): Promise<YandexDiskItem | null> {
   const url = `${YANDEX_API_BASE}?path=${encodeURIComponent(path)}&preview_size=${previewSize}`;
   const result = await yandexRequest(url);
-  if (result.code !== 200) return null;
-  const data = JSON.parse(result.data) as YandexDiskItem;
-  return data;
+  if (result.code !== 200 || !result.data) return null;
+  try {
+    return JSON.parse(result.data) as YandexDiskItem;
+  } catch {
+    return null;
+  }
 }
 
 /** Create a folder. Parent folders are not created automatically. Returns true if created or already exists. */
