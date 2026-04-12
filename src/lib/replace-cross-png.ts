@@ -3,13 +3,15 @@ import {
   deleteResource,
   downloadFileBuffer,
   getAllFilesRecursive,
+  getFilesOnlyUnderNamedFolders,
   getUploadUrl,
   uploadToHref,
 } from '@/lib/yandex-disk';
 
 const PNG_ROOT = 'disk:/Brand/PNG';
 const PRODUCTS_ROOT = 'disk:/Brand/Товары';
-const CROSS_SEGMENT = '/Кросс коды/';
+/** Имя папки на Диске (как в пути …/Кросс коды/…) */
+const CROSS_FOLDER_NAME = 'Кросс коды';
 
 export interface ReplaceCrossPngResult {
   /** .txt заменены на .png и удалены */
@@ -61,13 +63,8 @@ export async function replaceCrossTxtWithPngFromPngFolder(): Promise<ReplaceCros
     return result;
   }
 
-  const allUnderProducts = await getAllFilesRecursive(PRODUCTS_ROOT);
-  const txtInCross = allUnderProducts.filter(
-    (f) =>
-      f.type === 'file' &&
-      f.name.toLowerCase().endsWith('.txt') &&
-      f.path.includes(CROSS_SEGMENT),
-  );
+  const crossFiles = await getFilesOnlyUnderNamedFolders(PRODUCTS_ROOT, CROSS_FOLDER_NAME);
+  const txtInCross = crossFiles.filter((f) => f.name.toLowerCase().endsWith('.txt'));
 
   for (const f of txtInCross) {
     const stem = f.name.replace(/\.txt$/i, '');
@@ -96,12 +93,7 @@ export async function replaceCrossTxtWithPngFromPngFolder(): Promise<ReplaceCros
     result.replaced++;
   }
 
-  const pngInCross = allUnderProducts.filter(
-    (f) =>
-      f.type === 'file' &&
-      f.name.toLowerCase().endsWith('.png') &&
-      f.path.includes(CROSS_SEGMENT),
-  );
+  const pngInCross = crossFiles.filter((f) => f.name.toLowerCase().endsWith('.png'));
 
   for (const f of pngInCross) {
     const stem = f.name.replace(/\.png$/i, '');

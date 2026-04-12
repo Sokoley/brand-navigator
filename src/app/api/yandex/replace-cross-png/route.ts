@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { replaceCrossTxtWithPngFromPngFolder } from '@/lib/replace-cross-png';
 
+/** Долгая операция с Яндекс.Диском; без этого прокси/Vercel часто отдают 502 по таймауту. */
+export const maxDuration = 300;
+export const dynamic = 'force-dynamic';
+
 /**
  * POST: подтянуть .png из disk:/Brand/PNG в …/Кросс коды/ (замена .txt и обновление уже существующих .png).
  */

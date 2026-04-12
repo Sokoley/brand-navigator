@@ -93,6 +93,37 @@ export async function getAllFilesRecursive(basePath: string = 'disk:/Brand', pre
   return files;
 }
 
+/**
+ * Обходит дерево каталогов, но собирает только файлы из папок с заданным именем
+ * (например «Кросс коды»). Не загружает списки файлов из остальных веток — сильно меньше запросов к API и времени.
+ * @param folderName — точное имя папки на Диске
+ */
+export async function getFilesOnlyUnderNamedFolders(
+  basePath: string,
+  folderName: string,
+  previewSize: string = 'XXXL',
+): Promise<YandexDiskItem[]> {
+  const items = await getFiles(basePath, 1000, previewSize);
+  const dirs = items.filter((i) => i.type === 'dir');
+  const files: YandexDiskItem[] = [];
+
+  await Promise.all(
+    dirs.map(async (dir) => {
+      if (dir.name === folderName) {
+        const inner = await getFiles(dir.path, 1000, previewSize);
+        for (const f of inner) {
+          if (f.type === 'file') files.push(f);
+        }
+        return;
+      }
+      const nested = await getFilesOnlyUnderNamedFolders(dir.path, folderName, previewSize);
+      files.push(...nested);
+    }),
+  );
+
+  return files;
+}
+
 export async function deleteResource(path: string): Promise<{ code: number }> {
   const url = `${YANDEX_API_BASE}?path=${encodeURIComponent(path)}`;
   const result = await yandexRequest(url, 'DELETE');
