@@ -7,6 +7,20 @@
 export const PRODUCTS_ROOT = 'Товары';
 export const NO_GROUP = 'Без группы';
 
+/**
+ * Файл лежит в каталоге товаров на Диске: Brand/Товары/...
+ * (не показывать такие файлы на странице «Все макеты»).
+ */
+export function isUnderProductsRoot(diskPath: string): boolean {
+  if (!diskPath) return false;
+  if (diskPath.includes('/Brand/Товары/')) return true;
+  try {
+    return decodeURIComponent(diskPath).includes('/Brand/Товары/');
+  } catch {
+    return false;
+  }
+}
+
 const FILE_TYPE_FOLDERS = ['Кросс коды', 'Фото', 'Видео', 'Этикетки', 'Документы'] as const;
 export type FileTypeFolderName = (typeof FILE_TYPE_FOLDERS)[number];
 

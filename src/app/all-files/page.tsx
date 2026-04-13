@@ -12,6 +12,7 @@ import UploadProgress from '@/components/UploadProgress';
 import { useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { uploadFilesWithProgress } from '@/lib/upload-files';
+import { isUnderProductsRoot } from '@/lib/product-paths';
 
 function AllFilesContent() {
   const { isAuth, loading: authLoading } = useAuth();
@@ -122,6 +123,9 @@ function AllFilesContent() {
       const ct = f.custom_properties?.['Тип контента'] || '';
       return ct === 'Макет' || ct === '';
     });
+
+    // Не показывать файлы из каталога товаров на Диске (Brand/Товары/...)
+    filtered = filtered.filter((f) => !isUnderProductsRoot(f.path));
 
     if (filterCategory.length > 0) {
       filtered = filtered.filter((f) => {
