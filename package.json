@@ -13,6 +13,7 @@
     "import:content-photos": "npx tsx scripts/import-content-photos.ts",
     "delete:product-fotos": "npx tsx scripts/delete-product-fotos.ts",
     "import:passport-documents": "npx tsx scripts/import-passport-documents.ts",
+    "import:permit-documents": "npx tsx scripts/import-permit-documents.ts",
     "backfill:sku": "node scripts/backfill-sku.mjs"
   },
   "dependencies": {

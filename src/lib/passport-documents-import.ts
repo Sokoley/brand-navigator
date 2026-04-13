@@ -112,7 +112,7 @@ function normalizeNameForCompare(s: string): string {
 }
 
 /** Только точное совпадение (после нормализации) с именем папки товара на Диске. */
-function findExactProductFolder(line: string, catalog: ContentPhotoCatalogEntry[]): ContentPhotoCatalogEntry | null {
+export function findExactProductFolder(line: string, catalog: ContentPhotoCatalogEntry[]): ContentPhotoCatalogEntry | null {
   const nl = normalizeNameForCompare(line);
   if (nl.length < 2) return null;
   for (const e of catalog) {

@@ -10,8 +10,8 @@ export const NO_GROUP = 'Без группы';
 const FILE_TYPE_FOLDERS = ['Кросс коды', 'Фото', 'Видео', 'Этикетки', 'Документы'] as const;
 export type FileTypeFolderName = (typeof FILE_TYPE_FOLDERS)[number];
 
-/** Порядок вкладок в карточке товара (как папки на Яндексе: Фото, Видео, Документы, Кросс коды, Этикетки). */
-export const PRODUCT_TAB_FOLDERS = ['Фото', 'Видео', 'Документы', 'Кросс коды', 'Этикетки'] as const;
+/** Порядок вкладок в карточке товара (папки «Видео» и «Этикетки» на Диске скрыты в UI). */
+export const PRODUCT_TAB_FOLDERS = ['Фото', 'Документы', 'Кросс коды'] as const;
 
 const FILE_TYPE_TO_FOLDER: Record<string, FileTypeFolderName> = {
   'Фото': 'Фото',
