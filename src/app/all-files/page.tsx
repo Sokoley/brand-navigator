@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { YandexDiskItem, CustomProperties } from '@/lib/types';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { YandexDiskItem } from '@/lib/types';
 import { useAuth } from '@/components/AuthProvider';
 import FilterCloud from '@/components/FilterCloud';
 import FileList from '@/components/FileList';
@@ -20,7 +20,6 @@ function AllFilesContent() {
   const [allFiles, setAllFiles] = useState<YandexDiskItem[]>([]);
   const [filteredFiles, setFilteredFiles] = useState<YandexDiskItem[]>([]);
   const [selectedFile, setSelectedFile] = useState<YandexDiskItem | null>(null);
-  const [properties, setProperties] = useState<CustomProperties>({});
   const [loading, setLoading] = useState(true);
 
   const [filterCategory, setFilterCategory] = useState<string[]>([]);
@@ -59,25 +58,14 @@ function AllFilesContent() {
       return text.trim() || `HTTP ${res.status}`;
     };
 
-    Promise.all([
-      (async () => {
-        const r = await fetch('/api/yandex/files');
-        if (!r.ok) throw new Error(await readJsonError(r));
-        const data: unknown = await r.json();
-        return Array.isArray(data) ? data : [];
-      })(),
-      (async () => {
-        const r = await fetch('/api/properties');
-        if (!r.ok) throw new Error(await readJsonError(r));
-        const data: unknown = await r.json();
-        return data && typeof data === 'object' && !Array.isArray(data)
-          ? (data as CustomProperties)
-          : {};
-      })(),
-    ])
-      .then(([files, props]) => {
+    (async () => {
+      const r = await fetch('/api/yandex/files');
+      if (!r.ok) throw new Error(await readJsonError(r));
+      const data: unknown = await r.json();
+      return Array.isArray(data) ? data : [];
+    })()
+      .then((files) => {
         setAllFiles(files);
-        setProperties(props);
         setLoading(false);
       })
       .catch((err: unknown) => {
@@ -90,7 +78,6 @@ function AllFilesContent() {
               : String(err);
         setAlert({ type: 'error', message: msg });
         setAllFiles([]);
-        setProperties({});
         setLoading(false);
       });
   };
@@ -99,21 +86,109 @@ function AllFilesContent() {
     loadFiles();
   }, []);
 
-  // Clear subcategory filters when category changes
+  // Clear subcategory when category is cleared
   useEffect(() => {
-    if (filterCategory.length === 0) {
-      // No category selected, clear subcategories
-      if (filterSubcategory.length > 0) {
-        setFilterSubcategory([]);
-      }
-    } else {
-      // Check if selected subcategory is still valid for the selected category
-      const validSubcats = subcategoriesObj[filterCategory[0]] || [];
-      if (filterSubcategory.length > 0 && !validSubcats.includes(filterSubcategory[0])) {
+    if (filterCategory.length === 0 && filterSubcategory.length > 0) {
+      setFilterSubcategory([]);
+    }
+  }, [filterCategory, filterSubcategory.length]);
+
+  /** Макеты для тегов и списка: тип «Макет» / пусто, не из Brand/Товары */
+  const maketFiles = useMemo(() => {
+    return allFiles.filter((f) => {
+      const ct = f.custom_properties?.['Тип контента'] || '';
+      if (!(ct === 'Макет' || ct === '')) return false;
+      return !isUnderProductsRoot(f.path);
+    });
+  }, [allFiles]);
+
+  const categoriesWithFiles = useMemo(() => {
+    const s = new Set<string>();
+    for (const f of maketFiles) {
+      const v = (f.custom_properties?.['Категория'] || '').trim();
+      if (v) s.add(v);
+    }
+    return [...s].sort((a, b) => a.localeCompare(b, 'ru'));
+  }, [maketFiles]);
+
+  const subcategoriesWithFiles = useMemo(() => {
+    if (filterCategory.length === 0) return [];
+    const cat = filterCategory[0];
+    const s = new Set<string>();
+    for (const f of maketFiles) {
+      if ((f.custom_properties?.['Категория'] || '').trim() !== cat) continue;
+      const v = (f.custom_properties?.['Подкатегория'] || '').trim();
+      if (v) s.add(v);
+    }
+    return [...s].sort((a, b) => a.localeCompare(b, 'ru'));
+  }, [maketFiles, filterCategory]);
+
+  const filesAfterCategorySub = useMemo(() => {
+    let list = maketFiles;
+    if (filterCategory.length > 0) {
+      const c = filterCategory[0];
+      list = list.filter((f) => (f.custom_properties?.['Категория'] || '').trim() === c);
+    }
+    if (filterSubcategory.length > 0) {
+      const sub = filterSubcategory[0];
+      list = list.filter((f) => (f.custom_properties?.['Подкатегория'] || '').trim() === sub);
+    }
+    return list;
+  }, [maketFiles, filterCategory, filterSubcategory]);
+
+  const responsibleWithFiles = useMemo(() => {
+    const s = new Set<string>();
+    for (const f of filesAfterCategorySub) {
+      const v = (f.custom_properties?.['Ответственный'] || '').trim();
+      if (v) s.add(v);
+    }
+    return [...s].sort((a, b) => a.localeCompare(b, 'ru'));
+  }, [filesAfterCategorySub]);
+
+  const filesAfterResponsible = useMemo(() => {
+    let list = filesAfterCategorySub;
+    if (filterResponsible.length > 0) {
+      const r = filterResponsible[0];
+      list = list.filter((f) => (f.custom_properties?.['Ответственный'] || '').trim() === r);
+    }
+    return list;
+  }, [filesAfterCategorySub, filterResponsible]);
+
+  const productGroupsWithFiles = useMemo(() => {
+    const s = new Set<string>();
+    for (const f of filesAfterResponsible) {
+      const v = (f.custom_properties?.['Группа товаров'] || '').trim();
+      if (v) s.add(v);
+    }
+    return [...s].sort((a, b) => a.localeCompare(b, 'ru'));
+  }, [filesAfterResponsible]);
+
+  // Сброс выбора, если тега больше нет среди файлов
+  useEffect(() => {
+    if (filterCategory.length > 0 && !categoriesWithFiles.includes(filterCategory[0])) {
+      setFilterCategory([]);
+    }
+  }, [categoriesWithFiles, filterCategory]);
+
+  useEffect(() => {
+    if (filterSubcategory.length > 0 && filterCategory.length > 0) {
+      if (!subcategoriesWithFiles.includes(filterSubcategory[0])) {
         setFilterSubcategory([]);
       }
     }
-  }, [filterCategory]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [subcategoriesWithFiles, filterSubcategory, filterCategory]);
+
+  useEffect(() => {
+    if (filterResponsible.length > 0 && !responsibleWithFiles.includes(filterResponsible[0])) {
+      setFilterResponsible([]);
+    }
+  }, [responsibleWithFiles, filterResponsible]);
+
+  useEffect(() => {
+    if (filterProductGroup.length > 0 && !productGroupsWithFiles.includes(filterProductGroup[0])) {
+      setFilterProductGroup([]);
+    }
+  }, [productGroupsWithFiles, filterProductGroup]);
 
   useEffect(() => {
     let filtered = allFiles;
@@ -129,28 +204,28 @@ function AllFilesContent() {
 
     if (filterCategory.length > 0) {
       filtered = filtered.filter((f) => {
-        const cat = f.custom_properties?.['Категория'] || '';
+        const cat = (f.custom_properties?.['Категория'] || '').trim();
         return filterCategory.includes(cat);
       });
     }
 
     if (filterSubcategory.length > 0) {
       filtered = filtered.filter((f) => {
-        const sub = f.custom_properties?.['Подкатегория'] || '';
+        const sub = (f.custom_properties?.['Подкатегория'] || '').trim();
         return filterSubcategory.includes(sub);
       });
     }
 
     if (filterResponsible.length > 0) {
       filtered = filtered.filter((f) => {
-        const resp = f.custom_properties?.['Ответственный'] || '';
+        const resp = (f.custom_properties?.['Ответственный'] || '').trim();
         return filterResponsible.includes(resp);
       });
     }
 
     if (filterProductGroup.length > 0) {
       filtered = filtered.filter((f) => {
-        const pg = f.custom_properties?.['Группа товаров'] || '';
+        const pg = (f.custom_properties?.['Группа товаров'] || '').trim();
         return filterProductGroup.includes(pg);
       });
     }
@@ -217,16 +292,6 @@ function AllFilesContent() {
     }
   };
 
-  const categories = (properties['Категория'] as string[]) || [];
-  const subcategoriesObj = (properties['Подкатегория'] as Record<string, string[]>) || {};
-  const responsibleList = (properties['Ответственный'] as string[]) || [];
-  const productGroups = (properties['Группа товаров'] as string[]) || [];
-
-  // Get subcategories only for selected category (single selection)
-  const availableSubcategories = filterCategory.length > 0
-    ? (subcategoriesObj[filterCategory[0]] || [])
-    : [];
-
   if (authLoading) {
     return <div className="text-center text-gray-500 py-20 mt-[140px]">Загрузка...</div>;
   }
@@ -291,15 +356,15 @@ function AllFilesContent() {
             <div className="mb-6">
               <FilterCloud
                 title="Категория"
-                values={categories}
+                values={categoriesWithFiles}
                 selectedValues={filterCategory}
                 onChange={setFilterCategory}
                 singleSelect
               />
-              {filterCategory.length > 0 && availableSubcategories.length > 0 && (
+              {filterCategory.length > 0 && subcategoriesWithFiles.length > 0 && (
                 <FilterCloud
                   title="Подкатегория"
-                  values={availableSubcategories}
+                  values={subcategoriesWithFiles}
                   selectedValues={filterSubcategory}
                   onChange={setFilterSubcategory}
                   singleSelect
@@ -308,7 +373,7 @@ function AllFilesContent() {
               {isAuth && (
                 <FilterCloud
                   title="Ответственный"
-                  values={responsibleList}
+                  values={responsibleWithFiles}
                   selectedValues={filterResponsible}
                   onChange={setFilterResponsible}
                   singleSelect
@@ -316,7 +381,7 @@ function AllFilesContent() {
               )}
               <FilterCloud
                 title="Группа товаров"
-                values={productGroups}
+                values={productGroupsWithFiles}
                 selectedValues={filterProductGroup}
                 onChange={setFilterProductGroup}
                 singleSelect

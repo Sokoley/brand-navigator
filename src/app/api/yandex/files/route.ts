@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAllFilesRecursive } from '@/lib/yandex-disk';
+import { PRODUCTS_ROOT } from '@/lib/product-paths';
 
 export async function GET(request: Request) {
   try {
@@ -7,7 +8,10 @@ export async function GET(request: Request) {
     const namesOnly = searchParams.get('names') === '1';
     const contentType = searchParams.get('content') || '';
 
-    const items = await getAllFilesRecursive();
+    // Не обходить дерево каталога товаров — странице «Все макеты» оно не нужно и сильно замедляет API.
+    const items = await getAllFilesRecursive('disk:/Brand', 'XXXL', undefined, {
+      skipDirNames: [PRODUCTS_ROOT],
+    });
 
     if (namesOnly) {
       const names = items

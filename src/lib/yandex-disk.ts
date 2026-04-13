@@ -102,11 +102,18 @@ export type YandexWalkProgress = {
   logIntervalMs?: number;
 };
 
+/** Опции полного обхода дерева (например не заходить в каталог товаров). */
+export type GetAllFilesRecursiveOptions = {
+  /** Не рекурсировать в подкаталоги с этими именами (`dir.name`), на любом уровне. */
+  skipDirNames?: readonly string[];
+};
+
 /** Recursively list all files under basePath (e.g. disk:/Brand). Returns flat list of file items. Parallel per level. */
 export async function getAllFilesRecursive(
   basePath: string = 'disk:/Brand',
   previewSize: string = 'XXXL',
   progress?: YandexWalkProgress,
+  options?: GetAllFilesRecursiveOptions,
 ): Promise<YandexDiskItem[]> {
   if (progress) {
     progress.dirsVisited++;
@@ -131,9 +138,15 @@ export async function getAllFilesRecursive(
     }
   }
 
-  if (dirs.length > 0) {
+  const skipSet =
+    options?.skipDirNames && options.skipDirNames.length > 0
+      ? new Set(options.skipDirNames)
+      : null;
+  const dirsToWalk = skipSet ? dirs.filter((d) => !skipSet.has(d.name)) : dirs;
+
+  if (dirsToWalk.length > 0) {
     const nestedArrays = await Promise.all(
-      dirs.map((dir) => getAllFilesRecursive(dir.path, previewSize, progress)),
+      dirsToWalk.map((dir) => getAllFilesRecursive(dir.path, previewSize, progress, options)),
     );
     for (const arr of nestedArrays) {
       files.push(...arr);
