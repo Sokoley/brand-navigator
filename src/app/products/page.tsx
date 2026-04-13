@@ -56,7 +56,8 @@ export default function ProductsPage() {
     if (selectedGroup) {
       list = list.filter((p) => p.group === selectedGroup);
     }
-    if (searchQuery.trim()) {
+    // advancedSearch возвращает [] при длине запроса < 2 — не применяем, иначе список пустеет при одном символе
+    if (searchQuery.trim().length >= 2) {
       list = advancedSearch(list, searchQuery);
     }
     setFilteredProducts(list);
