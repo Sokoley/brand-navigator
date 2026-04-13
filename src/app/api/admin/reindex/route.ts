@@ -53,6 +53,8 @@ export async function POST(request: Request) {
   const { searchParams } = new URL(request.url);
   const contentFilter = searchParams.get('content') || 'Товар';
 
+  console.log('[reindex] POST: фоновая полная переиндексация запущена, content=', contentFilter);
+
   fullReindex(contentFilter)
     .then((result) =>
       finishReindexJob(result.products, result.files).catch((e) => {

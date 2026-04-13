@@ -287,19 +287,34 @@ function isProductFile(item: YandexDiskItem, contentFilter: string): boolean {
 export async function fullReindex(contentFilter: string = 'Товар'): Promise<{ products: number; files: number }> {
   if (!getPool()) throw new Error('DATABASE_URL is not set');
 
+  const t0 = Date.now();
+  const log = (msg: string) => console.log(`[reindex] ${msg} (+${Date.now() - t0} ms от старта)`);
+
+  log(`старт, фильтр контента: ${contentFilter}`);
+
   await executeWithRetry('SET FOREIGN_KEY_CHECKS = 0');
   await executeWithRetry('TRUNCATE TABLE product_files');
   await executeWithRetry('TRUNCATE TABLE products');
   await executeWithRetry('SET FOREIGN_KEY_CHECKS = 1');
+  log('таблицы products / product_files очищены');
 
-  const items = await getAllFilesRecursive(BRAND_BASE);
+  const walkProgress = { dirsVisited: 0, lastLogAt: Date.now(), logIntervalMs: 8000 };
+  log('запрос полного дерева файлов к API Яндекс.Диска…');
+  const tYandex = Date.now();
+  const items = await getAllFilesRecursive(BRAND_BASE, 'XXXL', walkProgress);
+  log(`Яндекс.Диск: получено ${items.length} файлов за ${Date.now() - tYandex} ms`);
+
   const productFiles = items.filter((it) => isProductFile(it, contentFilter));
+  log(`после фильтра товаров: ${productFiles.length} файлов (всего на диске было ${items.length})`);
 
   const productKeys = new Map<string, number>();
   const mainPhotoByProductId = new Map<number, string>();
   let filesInserted = 0;
 
-  for (const file of productFiles) {
+  const tDb = Date.now();
+  const totalPf = productFiles.length;
+  for (let i = 0; i < productFiles.length; i++) {
+    const file = productFiles[i];
     const props = file.custom_properties || {};
     const fromPath = parseProductFilePath(file.path);
     const productName = fromPath.productName || props['Название товара'] || '';
@@ -339,8 +354,16 @@ export async function fullReindex(contentFilter: string = 'Товар'): Promise
     if (props['Главное фото'] === 'true') {
       mainPhotoByProductId.set(productId, file.path);
     }
+
+    const n = i + 1;
+    if (n === 1 || n === totalPf || (n % 500 === 0 && n < totalPf)) {
+      log(`БД: записано файлов ${n}/${totalPf}…`);
+    }
   }
 
+  log(`БД: вставка файлов завершена за ${Date.now() - tDb} ms`);
+
+  log('проставление главных фото…');
   for (const [productId, mainPath] of mainPhotoByProductId) {
     await executeWithRetry('UPDATE products SET main_photo_path = ? WHERE id = ?', [mainPath, productId]);
   }
@@ -356,6 +379,10 @@ export async function fullReindex(contentFilter: string = 'Товар'): Promise
       await executeWithRetry('UPDATE products SET main_photo_path = ? WHERE id = ?', [fallbackPath, productId]);
     }
   }
+
+  log(
+    `готово: ${productKeys.size} товаров, ${filesInserted} файлов в БД, просмотрено каталогов на Диске: ${walkProgress.dirsVisited}, всего ${Date.now() - t0} ms`,
+  );
 
   return { products: productKeys.size, files: filesInserted };
 }

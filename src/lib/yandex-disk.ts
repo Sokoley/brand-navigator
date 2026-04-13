@@ -95,8 +95,30 @@ export async function createFolder(folderPath: string): Promise<boolean> {
   return result.code === 201 || result.code === 409;
 }
 
+/** Для getAllFilesRecursive: при переиндексации пишет в консоль не чаще чем раз в logIntervalMs. */
+export type YandexWalkProgress = {
+  dirsVisited: number;
+  lastLogAt: number;
+  logIntervalMs?: number;
+};
+
 /** Recursively list all files under basePath (e.g. disk:/Brand). Returns flat list of file items. Parallel per level. */
-export async function getAllFilesRecursive(basePath: string = 'disk:/Brand', previewSize: string = 'XXXL'): Promise<YandexDiskItem[]> {
+export async function getAllFilesRecursive(
+  basePath: string = 'disk:/Brand',
+  previewSize: string = 'XXXL',
+  progress?: YandexWalkProgress,
+): Promise<YandexDiskItem[]> {
+  if (progress) {
+    progress.dirsVisited++;
+    const interval = progress.logIntervalMs ?? 8000;
+    const now = Date.now();
+    if (now - progress.lastLogAt >= interval) {
+      progress.lastLogAt = now;
+      const short = basePath.length > 100 ? `${basePath.slice(0, 100)}…` : basePath;
+      console.log(`[reindex/yandex] обход Диска: просмотрено каталогов ${progress.dirsVisited}, текущий: ${short}`);
+    }
+  }
+
   const items = await getFiles(basePath, 1000, previewSize);
   const files: YandexDiskItem[] = [];
   const dirs: YandexDiskItem[] = [];
@@ -111,7 +133,7 @@ export async function getAllFilesRecursive(basePath: string = 'disk:/Brand', pre
 
   if (dirs.length > 0) {
     const nestedArrays = await Promise.all(
-      dirs.map((dir) => getAllFilesRecursive(dir.path, previewSize)),
+      dirs.map((dir) => getAllFilesRecursive(dir.path, previewSize, progress)),
     );
     for (const arr of nestedArrays) {
       files.push(...arr);
