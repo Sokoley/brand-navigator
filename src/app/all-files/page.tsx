@@ -44,14 +44,54 @@ function AllFilesContent() {
   }, [searchParams]);
 
   const loadFiles = () => {
+    setLoading(true);
+    setAlert(null);
+
+    const readJsonError = async (res: Response) => {
+      const text = await res.text();
+      try {
+        const j = JSON.parse(text) as { error?: string };
+        if (j && typeof j.error === 'string') return j.error;
+      } catch {
+        /* ignore */
+      }
+      return text.trim() || `HTTP ${res.status}`;
+    };
+
     Promise.all([
-      fetch('/api/yandex/files').then((r) => r.json()),
-      fetch('/api/properties').then((r) => r.json()),
-    ]).then(([files, props]) => {
-      setAllFiles(files);
-      setProperties(props);
-      setLoading(false);
-    });
+      (async () => {
+        const r = await fetch('/api/yandex/files');
+        if (!r.ok) throw new Error(await readJsonError(r));
+        const data: unknown = await r.json();
+        return Array.isArray(data) ? data : [];
+      })(),
+      (async () => {
+        const r = await fetch('/api/properties');
+        if (!r.ok) throw new Error(await readJsonError(r));
+        const data: unknown = await r.json();
+        return data && typeof data === 'object' && !Array.isArray(data)
+          ? (data as CustomProperties)
+          : {};
+      })(),
+    ])
+      .then(([files, props]) => {
+        setAllFiles(files);
+        setProperties(props);
+        setLoading(false);
+      })
+      .catch((err: unknown) => {
+        console.error('loadFiles', err);
+        const msg =
+          err instanceof TypeError
+            ? 'Не удалось связаться с сервером. Проверьте сеть, адрес сайта и что приложение запущено.'
+            : err instanceof Error
+              ? err.message
+              : String(err);
+        setAlert({ type: 'error', message: msg });
+        setAllFiles([]);
+        setProperties({});
+        setLoading(false);
+      });
   };
 
   useEffect(() => {
