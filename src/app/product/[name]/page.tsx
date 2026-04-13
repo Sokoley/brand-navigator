@@ -741,7 +741,7 @@ export default function ProductDetailPage({ params }: { params: { name: string }
               {activeFilter === 'Карточки для маркетплейсов' && (
                 <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-gray-700">
                   <p className="font-medium mb-1">🛒 Карточки для маркетплейсов</p>
-                  <p>Изображения товаров, загруженные на маркетплейс OZON. Данные получены через OZON API по SKU товаров.</p>
+                  <p>Изображения товаров с OZON по SKU: данные запрашиваются из основного кабинета и из кабинета PM (если он настроен). Одинаковые URL не дублируются.</p>
                 </div>
               )}
               {activeFilter === 'Карточки для маркетплейсов' ? (
