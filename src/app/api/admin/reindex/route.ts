@@ -55,9 +55,12 @@ export async function POST(request: Request) {
 
   fullReindex(contentFilter)
     .then((result) =>
-      finishReindexJob(result.products, result.files).catch((e) =>
-        console.error('finishReindexJob:', e),
-      ),
+      finishReindexJob(result.products, result.files).catch((e) => {
+        console.error('finishReindexJob:', e);
+        return failReindexJob(
+          e instanceof Error ? e.message : 'Не удалось записать результат переиндексации в reindex_meta',
+        );
+      }),
     )
     .catch((error) => {
       console.error('Reindex error:', error);

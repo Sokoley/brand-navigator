@@ -6,6 +6,7 @@
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { getPool, executeWithRetry } from '@/lib/db';
 
+/** «running» дольше этого — считаем зависшим (падение процесса, обрыв без finish). Переиндексация по большому каталогу может идти часами. */
 const STALE_RUNNING_HOURS = 4;
 
 export type ReindexJobRow = {
@@ -17,18 +18,26 @@ export type ReindexJobRow = {
   files: number | null;
 };
 
-/** Сброс «зависшего» running (после падения процесса и т.п.). */
+/** Сброс «зависшего» running (падение процесса, обрыв БД без finishReindexJob и т.д.). */
 export async function resetStaleRunningJob(): Promise<void> {
   if (!getPool()) return;
   await executeWithRetry(
     `UPDATE reindex_meta
      SET status = 'error',
          finished_at = UTC_TIMESTAMP(),
-         error_message = 'Прервано (сервер перезапущен или таймаут)'
+         error_message = 'Прервано: предыдущий запуск не завершился (таймаут или сбой). Запустите переиндексацию снова.'
      WHERE id = 1
        AND status = 'running'
        AND started_at IS NOT NULL
        AND started_at < UTC_TIMESTAMP() - INTERVAL ${STALE_RUNNING_HOURS} HOUR`,
+  );
+}
+
+/** Строка id=1 нужна, иначе UPDATE в tryStart даст 0 строк и клиент получит ложный «уже выполняется». */
+export async function ensureReindexMetaRow(): Promise<void> {
+  if (!getPool()) return;
+  await executeWithRetry(
+    `INSERT IGNORE INTO reindex_meta (id, status) VALUES (1, 'idle')`,
   );
 }
 
@@ -38,6 +47,7 @@ export async function resetStaleRunningJob(): Promise<void> {
 export async function tryStartReindexJob(): Promise<'started' | 'already_running'> {
   if (!getPool()) throw new Error('Нет подключения к БД');
 
+  await ensureReindexMetaRow();
   await resetStaleRunningJob();
 
   const [r] = await executeWithRetry(
