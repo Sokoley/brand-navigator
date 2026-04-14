@@ -462,8 +462,8 @@ export default function ProductDetailPage({ params }: { params: { name: string }
         // Fetch each file and add to zip
         for (const file of crossFiles) {
           try {
-            if (file.file) {
-              const response = await fetch(getDownloadProxyUrl(file.file, file.name));
+            if (file.file || (file.path && file.path.startsWith('disk:/'))) {
+              const response = await fetch(getDownloadProxyUrl(file.file || '', file.name, file.path));
               const blob = await response.blob();
               zip.file(file.name, blob);
             }
@@ -1012,10 +1012,10 @@ export default function ProductDetailPage({ params }: { params: { name: string }
                         >
                           🔗
                         </button>
-                        {file.file && (
+                        {(file.file || (file.path && file.path.startsWith('disk:/'))) && (
                           <a
                             className="no-underline text-base text-black p-2 rounded-md hover:bg-gray-100"
-                            href={getDownloadProxyUrl(file.file, file.name)}
+                            href={getDownloadProxyUrl(file.file || '', file.name, file.path)}
                             onClick={(e) => e.stopPropagation()}
                             title="Скачать"
                           >

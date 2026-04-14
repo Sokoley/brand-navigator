@@ -52,10 +52,10 @@ export default function FileList({
               </div>
             </div>
             <div className="flex items-start gap-1 md:gap-2.5 shrink-0 ml-1 md:ml-2">
-              {file.file && (
+              {(file.file || (file.path && file.path.startsWith('disk:/'))) && (
                 <a
                   className="no-underline text-base text-black p-2 rounded-md hover:bg-gray-100 transition-colors"
-                  href={getDownloadProxyUrl(file.file, file.name)}
+                  href={getDownloadProxyUrl(file.file || '', file.name, file.path)}
                   onClick={(e) => e.stopPropagation()}
                   title="Скачать"
                 >

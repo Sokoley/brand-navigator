@@ -50,7 +50,14 @@ export function getPreviewProxyUrl(previewUrl: string, size: string = 'XXXL'): s
   return '/api/preview?url=' + encodeURIComponent(url);
 }
 
-export function getDownloadProxyUrl(fileUrl: string, filename: string): string {
+/**
+ * Ссылка на прокси скачивания. Если передан `diskPath` (disk:/Brand/...),
+ * сервер запросит актуальный href у API Диска — так надёжнее, чем устаревший `file`.
+ */
+export function getDownloadProxyUrl(fileUrl: string, filename: string, diskPath?: string): string {
+  if (diskPath && diskPath.startsWith('disk:/')) {
+    return '/api/download?path=' + encodeURIComponent(diskPath) + '&filename=' + encodeURIComponent(filename);
+  }
   if (!fileUrl) return '';
   return '/api/download?url=' + encodeURIComponent(fileUrl) + '&filename=' + encodeURIComponent(filename);
 }
