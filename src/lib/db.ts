@@ -1,4 +1,5 @@
 import mysql from 'mysql2/promise';
+import { allocateSlugInGroup } from '@/lib/product-slug';
 
 let pool: mysql.Pool | null = null;
 let schemaPromise: Promise<void> | null = null;
@@ -102,6 +103,7 @@ CREATE TABLE IF NOT EXISTS products (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(500) NOT NULL,
   product_group VARCHAR(500) NOT NULL DEFAULT '' COMMENT 'Группа товара — папка на Диске (Brand/Товары/product_group/...)',
+  slug VARCHAR(500) NULL COMMENT 'Латинский сегмент URL, уникален в паре с product_group',
   main_photo_path VARCHAR(1000) NULL,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uk_name_group (name(191), product_group(191))
@@ -175,5 +177,67 @@ export async function runSchema(): Promise<void> {
     await executeWithRetry('ALTER TABLE product_files DROP COLUMN custom_properties');
   } catch {
     // столбец уже удалён или отсутствует
+  }
+
+  try {
+    await executeWithRetry(
+      'ALTER TABLE products ADD COLUMN slug VARCHAR(500) NULL COMMENT \'Латинский сегмент URL\''
+    );
+  } catch {
+    // столбец уже есть
+  }
+
+  await backfillProductSlugs();
+
+  try {
+    await executeWithRetry('ALTER TABLE products MODIFY COLUMN slug VARCHAR(500) NOT NULL');
+  } catch {
+    // уже NOT NULL или пустые slug — оставляем как есть до следующего прогона
+  }
+
+  try {
+    await executeWithRetry('ALTER TABLE products DROP INDEX uk_slug_group');
+  } catch {
+    // индекс отсутствует
+  }
+  try {
+    await executeWithRetry(
+      'ALTER TABLE products ADD UNIQUE KEY uk_slug_group (slug(191), product_group(191))'
+    );
+  } catch {
+    // уже есть или коллизии — оставляем без уникального ключа до исправления slug
+  }
+}
+
+/** Заполняет products.slug для строк с пустым/NULL slug. */
+async function backfillProductSlugs(): Promise<void> {
+  if (!getPool()) return;
+  try {
+    const [rows] = await executeWithRetry(
+      'SELECT id, name, product_group, slug FROM products ORDER BY product_group, id'
+    );
+    const list = (Array.isArray(rows) ? rows : []) as Array<{
+      id: number;
+      name: string;
+      product_group: string;
+      slug: string | null;
+    }>;
+    const usedByGroup = new Map<string, Set<string>>();
+    for (const r of list) {
+      const g = r.product_group ?? '';
+      if (!usedByGroup.has(g)) usedByGroup.set(g, new Set());
+      const s = (r.slug || '').trim();
+      if (s) usedByGroup.get(g)!.add(s);
+    }
+    for (const r of list) {
+      if ((r.slug || '').trim()) continue;
+      const g = r.product_group ?? '';
+      const set = usedByGroup.get(g) || new Set();
+      const newSlug = allocateSlugInGroup(r.name, set);
+      usedByGroup.set(g, set);
+      await executeWithRetry('UPDATE products SET slug = ? WHERE id = ?', [newSlug, r.id]);
+    }
+  } catch (e) {
+    console.error('[db] backfillProductSlugs', e);
   }
 }

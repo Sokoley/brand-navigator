@@ -34,7 +34,10 @@ export default function ProductCard({
 
   return (
     <div className="bg-white border border-border rounded-xl p-4 md:p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
-      <Link href={`/product/${encodeURIComponent(product.name)}${product.group ? `?group=${encodeURIComponent(product.group)}` : ''}`} className="no-underline text-inherit">
+      <Link
+        href={`/product/${product.slug ? encodeURIComponent(product.slug) : encodeURIComponent(product.name)}${product.group ? `?group=${encodeURIComponent(product.group)}` : ''}`}
+        className="no-underline text-inherit"
+      >
         <div className="flex items-start gap-3 md:gap-4 mb-3 md:mb-4">
           {mainImage ? (
             <div className="w-16 h-16 md:w-20 md:h-20 rounded-lg border border-border bg-gray-50 shrink-0 overflow-hidden flex items-center justify-center">

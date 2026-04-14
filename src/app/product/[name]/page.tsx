@@ -12,6 +12,10 @@ import UploadProgress from '@/components/UploadProgress';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 
+function hasCyrillic(s: string): boolean {
+  return /[\u0400-\u04FF]/.test(s);
+}
+
 const PRODUCT_FILES_CACHE_MAX = 30;
 const productFilesCache = new Map<string, YandexDiskItem[]>();
 
@@ -96,8 +100,17 @@ function applyFilesToState(
 export default function ProductDetailPage({ params }: { params: { name: string } }) {
   const { isAuth } = useAuth();
   const searchParams = useSearchParams();
-  const productName = decodeURIComponent(params.name);
+  const urlSegment = decodeURIComponent(params.name);
+  const isLegacyPath = hasCyrillic(urlSegment);
   const groupFromUrl = useMemo(() => searchParams.get('group'), [searchParams]);
+  const fileFromUrl = useMemo(() => searchParams.get('file'), [searchParams]);
+
+  const [resolvedFromSlug, setResolvedFromSlug] = useState<string | null>(null);
+  const [slugResolveError, setSlugResolveError] = useState<string | null>(null);
+  const [resolvingSlug, setResolvingSlug] = useState(() => !isLegacyPath);
+
+  const productName = isLegacyPath ? urlSegment : (resolvedFromSlug ?? '');
+
   const [allFiles, setAllFiles] = useState<YandexDiskItem[]>([]);
   const [filteredFiles, setFilteredFiles] = useState<YandexDiskItem[]>([]);
   const [fileTypes, setFileTypes] = useState<string[]>([]);
@@ -125,10 +138,55 @@ export default function ProductDetailPage({ params }: { params: { name: string }
   const imageRef = useRef<HTMLImageElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    const seg = decodeURIComponent(params.name);
+    if (hasCyrillic(seg)) {
+      setResolvedFromSlug(null);
+      setSlugResolveError(null);
+      setResolvingSlug(false);
+      return;
+    }
+    let cancelled = false;
+    setResolvingSlug(true);
+    setSlugResolveError(null);
+    const url = new URL('/api/yandex/resolve-product', window.location.origin);
+    url.searchParams.set('slug', seg);
+    if (groupFromUrl) url.searchParams.set('group', groupFromUrl);
+    fetch(url.toString())
+      .then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || 'Товар не найден');
+        return data as { name: string; group?: string };
+      })
+      .then((data) => {
+        if (cancelled) return;
+        setResolvedFromSlug(data.name);
+        if (data.group && !groupFromUrl) setProductGroup(data.group);
+        setSlugResolveError(null);
+      })
+      .catch((e: Error) => {
+        if (cancelled) return;
+        setResolvedFromSlug(null);
+        setSlugResolveError(e.message || 'Ошибка');
+      })
+      .finally(() => {
+        if (!cancelled) setResolvingSlug(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [params.name, groupFromUrl]);
+
   const effectiveGroup = (productGroup || groupFromUrl || '').trim();
   const needGroupSelection = isAuth && !effectiveGroup && !loading;
 
   const fetchFiles = useCallback(() => {
+    if (!productName.trim()) {
+      if (resolvingSlug) setLoading(true);
+      else setLoading(false);
+      return;
+    }
+
     const cacheKey = `${productName}\0${groupFromUrl ?? ''}`;
     const setters = {
       setAllFiles,
@@ -143,6 +201,8 @@ export default function ProductDetailPage({ params }: { params: { name: string }
     if (cached) {
       applyFilesToState(cached, setters);
       setLoading(false);
+    } else {
+      setLoading(true);
     }
 
     const url = new URL('/api/yandex/product-files', window.location.origin);
@@ -170,7 +230,7 @@ export default function ProductDetailPage({ params }: { params: { name: string }
         }
         setLoading(false);
       });
-  }, [productName, groupFromUrl]);
+  }, [productName, groupFromUrl, resolvingSlug]);
 
   useEffect(() => {
     fetchFiles();
@@ -197,7 +257,36 @@ export default function ProductDetailPage({ params }: { params: { name: string }
 
   // При первой загрузке файлов открыть первую вкладку, в которой есть файлы
   const hasSetInitialTab = useRef(false);
+
   useEffect(() => {
+    hasSetInitialTab.current = false;
+  }, [productName]);
+
+  // Параметр ?file= — открыть вкладку и превью для указанного файла
+  useEffect(() => {
+    if (!fileFromUrl || allFiles.length === 0) return;
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(fileFromUrl);
+    } catch {
+      return;
+    }
+    const match = allFiles.find((f) => f.path === decoded);
+    if (!match) return;
+    hasSetInitialTab.current = true;
+    setSelectedFile(match);
+    const contentType = match.custom_properties?.['Тип контента'] || '';
+    if (contentType === 'Макет') {
+      setActiveFilter('Макеты');
+    } else {
+      const tab = getFileTabFolder(match.path, match.custom_properties?.['Тип файла']);
+      setActiveFilter(tab);
+    }
+    if (match.preview) setMainPhotoPreview(match.preview);
+  }, [allFiles, fileFromUrl]);
+
+  useEffect(() => {
+    if (fileFromUrl) return;
     if (allFiles.length > 0 && !hasSetInitialTab.current) {
       hasSetInitialTab.current = true;
       const withCount = PRODUCT_TAB_FOLDERS.find((tab) =>
@@ -208,7 +297,7 @@ export default function ProductDetailPage({ params }: { params: { name: string }
       );
       if (withCount) setActiveFilter(withCount);
     }
-  }, [allFiles]);
+  }, [allFiles, fileFromUrl]);
 
   // Fetch marketplace images from OZON API
   useEffect(() => {
@@ -264,6 +353,17 @@ export default function ProductDetailPage({ params }: { params: { name: string }
       });
     }
   }, [selectedFile]);
+
+  const handleCopyFileLink = useCallback((filePath: string) => {
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.set('file', filePath);
+      void navigator.clipboard.writeText(u.toString());
+      alert('Ссылка скопирована');
+    } catch {
+      alert('Не удалось скопировать ссылку');
+    }
+  }, []);
 
   const handleSetMainPhoto = useCallback(async (file: YandexDiskItem) => {
     if (settingMainPhoto) return;
@@ -596,7 +696,7 @@ export default function ProductDetailPage({ params }: { params: { name: string }
         style={{ backgroundColor: headerColor, marginLeft: 'calc(-50vw + 50%)' }}
       >
         <h2 className="max-w-[1440px] mb-[60px] md:mb-[100px] ml-4 md:ml-[120px] text-white text-xl sm:text-2xl md:text-[32px] font-bold z-[2] drop-shadow-[1px_1px_3px_rgba(0,0,0,0.5)]">
-          {productName}
+          {productName || (resolvingSlug && !isLegacyPath ? 'Загрузка…' : '')}
         </h2>
         {sectionImageUrl && (
           <img
@@ -610,7 +710,10 @@ export default function ProductDetailPage({ params }: { params: { name: string }
         )}
       </div>
 
-      {loading ? (
+      {!isLegacyPath && slugResolveError && !resolvingSlug ? (
+        <div className="text-center text-red-600 py-20 px-4">{slugResolveError}</div>
+      ) : (!isLegacyPath && resolvingSlug && !productName.trim()) ||
+        (productName.trim() !== '' && loading) ? (
         <div className="text-center text-gray-500 py-20">Загрузка...</div>
       ) : (
         <>
@@ -886,6 +989,17 @@ export default function ProductDetailPage({ params }: { params: { name: string }
                         </div>
                       </div>
                       <div className="flex items-start gap-2.5 shrink-0 ml-2">
+                        <button
+                          type="button"
+                          className="text-base text-black p-2 rounded-md hover:bg-gray-100 bg-transparent border-none cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCopyFileLink(file.path);
+                          }}
+                          title="Скопировать ссылку на этот файл"
+                        >
+                          🔗
+                        </button>
                         {file.file && (
                           <a
                             className="no-underline text-base text-black p-2 rounded-md hover:bg-gray-100"

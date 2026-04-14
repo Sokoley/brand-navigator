@@ -1,6 +1,7 @@
 import { getPool, ensureSchema, executeWithRetry } from '@/lib/db';
 import { getAllFilesRecursive, getResource } from '@/lib/yandex-disk';
 import { parseProductFilePath } from '@/lib/product-paths';
+import { allocateSlugInGroup } from '@/lib/product-slug';
 import { addProductName, addSKU } from '@/lib/properties-manager';
 import { Product, YandexDiskItem, FileInfo } from '@/lib/types';
 
@@ -11,6 +12,7 @@ interface ProductRow {
   id: number;
   name: string;
   product_group: string;
+  slug?: string | null;
   main_photo_path: string | null;
   updated_at: Date;
 }
@@ -52,6 +54,41 @@ function fileRowToYandexItem(row: ProductFileRow): YandexDiskItem {
   };
 }
 
+async function nextSlugForProductGroup(productName: string, productGroup: string): Promise<string> {
+  const [rows] = await executeWithRetry('SELECT slug FROM products WHERE product_group = ?', [productGroup]);
+  const used = new Set<string>();
+  for (const r of Array.isArray(rows) ? rows : []) {
+    const s = ((r as { slug: string }).slug || '').trim();
+    if (s) used.add(s);
+  }
+  return allocateSlugInGroup(productName, used);
+}
+
+/** Разрешение латинского сегмента URL в имя товара (и группу). Без БД — null. */
+export async function resolveProductBySlug(
+  slug: string,
+  group?: string | null,
+): Promise<{ name: string; product_group: string } | null> {
+  if (!getPool()) return null;
+  await ensureSchema();
+  const s = slug.trim();
+  if (!s) return null;
+  const g = (group || '').trim();
+  if (g) {
+    const [rows] = await executeWithRetry(
+      'SELECT name, product_group FROM products WHERE slug = ? AND product_group = ? LIMIT 1',
+      [s, g],
+    );
+    const arr = (Array.isArray(rows) ? rows : []) as { name: string; product_group: string }[];
+    return arr[0] ?? null;
+  }
+  const [rows] = await executeWithRetry('SELECT name, product_group FROM products WHERE slug = ?', [s]);
+  const arr = (Array.isArray(rows) ? rows : []) as { name: string; product_group: string }[];
+  if (arr.length === 0) return null;
+  if (arr.length > 1) return null;
+  return arr[0];
+}
+
 function mapFileTypeToCategory(fileType: string): keyof Pick<Product, 'photos' | 'videos' | 'documents' | 'png_files' | 'label_files'> {
   const t = (fileType || '').trim();
   if (t === 'Фото' || t === 'Главное фото') return 'photos';
@@ -68,7 +105,7 @@ export async function getProducts(contentFilter: string = 'Товар'): Promise
   await ensureSchema();
 
   const [productRows] = await executeWithRetry(
-    'SELECT id, name, product_group, main_photo_path, updated_at FROM products ORDER BY name, product_group'
+    'SELECT id, name, product_group, slug, main_photo_path, updated_at FROM products ORDER BY name, product_group'
   );
   const rows = (Array.isArray(productRows) ? productRows : []) as ProductRow[];
 
@@ -93,10 +130,12 @@ export async function getProducts(contentFilter: string = 'Товар'): Promise
   for (const [name, productRows] of byName) {
     const allFiles: ProductFileRow[] = [];
     let group = '';
+    let slug = '';
     let mainPhotoPath = '';
     for (const p of productRows) {
       allFiles.push(...(filesByProductId.get(p.id) || []));
       if (!group) group = p.product_group;
+      if (!slug && String(p.slug ?? '').trim()) slug = String(p.slug ?? '').trim();
       if (p.main_photo_path) mainPhotoPath = p.main_photo_path;
     }
     const skus = [...new Set(allFiles.map((f) => f.sku).filter(Boolean))] as string[];
@@ -132,6 +171,7 @@ export async function getProducts(contentFilter: string = 'Товар'): Promise
 
     result[name] = {
       name,
+      slug,
       group,
       skus,
       main_photo,
@@ -223,9 +263,11 @@ export async function afterUpload(
   if (existingRows.length > 0) {
     productId = existingRows[0].id;
   } else {
-    const [ins] = await executeWithRetry('INSERT INTO products (name, product_group) VALUES (?, ?)', [
+    const slug = await nextSlugForProductGroup(productName, productGroup);
+    const [ins] = await executeWithRetry('INSERT INTO products (name, product_group, slug) VALUES (?, ?, ?)', [
       productName,
       productGroup,
+      slug,
     ]);
     const header = ins as { insertId?: number };
     productId = header.insertId ?? 0;
@@ -287,6 +329,8 @@ function isProductFile(item: YandexDiskItem, contentFilter: string): boolean {
 export async function fullReindex(contentFilter: string = 'Товар'): Promise<{ products: number; files: number }> {
   if (!getPool()) throw new Error('DATABASE_URL is not set');
 
+  await ensureSchema();
+
   const t0 = Date.now();
   const log = (msg: string) => console.log(`[reindex] ${msg} (+${Date.now() - t0} ms от старта)`);
 
@@ -308,6 +352,7 @@ export async function fullReindex(contentFilter: string = 'Товар'): Promise
   log(`после фильтра товаров: ${productFiles.length} файлов (всего на диске было ${items.length})`);
 
   const productKeys = new Map<string, number>();
+  const slugUsedByGroup = new Map<string, Set<string>>();
   const mainPhotoByProductId = new Map<number, string>();
   let filesInserted = 0;
 
@@ -327,10 +372,13 @@ export async function fullReindex(contentFilter: string = 'Товар'): Promise
     const key = `${productName}\0${productGroup}`;
     let productId = productKeys.get(key);
     if (productId == null) {
-      const [ins] = await executeWithRetry('INSERT INTO products (name, product_group) VALUES (?, ?)', [
-        productName,
-        productGroup,
-      ]);
+      if (!slugUsedByGroup.has(productGroup)) slugUsedByGroup.set(productGroup, new Set());
+      const used = slugUsedByGroup.get(productGroup)!;
+      const slug = allocateSlugInGroup(productName, used);
+      const [ins] = await executeWithRetry(
+        'INSERT INTO products (name, product_group, slug) VALUES (?, ?, ?)',
+        [productName, productGroup, slug],
+      );
       productId = (ins as { insertId: number }).insertId;
       productKeys.set(key, productId);
     }
@@ -407,6 +455,7 @@ function buildProductsFromFiles(items: YandexDiskItem[], contentFilter: string):
     if (!products[productName]) {
       products[productName] = {
         name: productName,
+        slug: '',
         group: productGroup,
         skus: [],
         main_photo: '',

@@ -15,6 +15,8 @@ export interface FileInfo {
 
 export interface Product {
   name: string;
+  /** Латинский сегмент URL; из БД или пусто при режиме без индекса */
+  slug: string;
   group: string;
   skus: string[];
   main_photo: FileInfo | null | '';
