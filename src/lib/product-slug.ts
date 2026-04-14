@@ -24,3 +24,19 @@ export function allocateSlugInGroup(baseName: string, usedInGroup: Set<string>):
   usedInGroup.add(candidate);
   return candidate;
 }
+
+/** Slug группы товара для query-параметра `group` (латиница). */
+export function groupSlugFromLabel(groupName: string): string {
+  return slugifyFromProductName(groupName);
+}
+
+/**
+ * Совпадение `group` из URL с названием группы в БД: точное (legacy) или по латинскому slug.
+ */
+export function matchesGroupQuery(urlGroup: string, dbGroup: string): boolean {
+  const u = (urlGroup || '').trim();
+  const d = (dbGroup || '').trim();
+  if (!u || !d) return false;
+  if (u === d) return true;
+  return slugifyFromProductName(d) === u.toLowerCase();
+}

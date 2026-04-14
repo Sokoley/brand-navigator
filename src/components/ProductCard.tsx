@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { Product } from '@/lib/types';
+import { groupSlugFromLabel } from '@/lib/product-slug';
 import { getPreviewProxyUrl, highlightText } from '@/lib/utils';
 
 function mainPhotoPreviewUrl(main: Product['main_photo']): string {
@@ -32,10 +33,14 @@ export default function ProductCard({
       ? getPreviewProxyUrl(fallbackPng.preview)
       : '';
 
+  const groupQs = product.group
+    ? product.groupSlug || groupSlugFromLabel(product.group)
+    : '';
+
   return (
     <div className="bg-white border border-border rounded-xl p-4 md:p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
       <Link
-        href={`/product/${product.slug ? encodeURIComponent(product.slug) : encodeURIComponent(product.name)}${product.group ? `?group=${encodeURIComponent(product.group)}` : ''}`}
+        href={`/product/${product.slug ? encodeURIComponent(product.slug) : encodeURIComponent(product.name)}${groupQs ? `?group=${encodeURIComponent(groupQs)}` : ''}`}
         className="no-underline text-inherit"
       >
         <div className="flex items-start gap-3 md:gap-4 mb-3 md:mb-4">

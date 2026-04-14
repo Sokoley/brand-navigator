@@ -18,6 +18,8 @@ export interface Product {
   /** Латинский сегмент URL; из БД или пусто при режиме без индекса */
   slug: string;
   group: string;
+  /** Латинский slug группы для ?group= */
+  groupSlug: string;
   skus: string[];
   main_photo: FileInfo | null | '';
   photos: FileInfo[];
@@ -41,6 +43,8 @@ export interface YandexDiskItem {
   name: string;
   type: 'file' | 'dir';
   path: string;
+  /** id строки в product_files (только при ответе из БД) */
+  dbId?: number;
   preview?: string;
   file?: string;
   size?: number;

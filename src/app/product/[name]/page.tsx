@@ -11,6 +11,7 @@ import FilePreview from '@/components/FilePreview';
 import UploadProgress from '@/components/UploadProgress';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
+import { groupSlugFromLabel } from '@/lib/product-slug';
 
 function hasCyrillic(s: string): boolean {
   return /[\u0400-\u04FF]/.test(s);
@@ -262,16 +263,23 @@ export default function ProductDetailPage({ params }: { params: { name: string }
     hasSetInitialTab.current = false;
   }, [productName]);
 
-  // Параметр ?file= — открыть вкладку и превью для указанного файла
+  // Параметр ?file= — id из БД или полный путь (legacy)
   useEffect(() => {
     if (!fileFromUrl || allFiles.length === 0) return;
-    let decoded: string;
-    try {
-      decoded = decodeURIComponent(fileFromUrl);
-    } catch {
-      return;
+    const raw = fileFromUrl.trim();
+    let match: YandexDiskItem | undefined;
+    if (/^\d+$/.test(raw)) {
+      const id = parseInt(raw, 10);
+      match = allFiles.find((f) => f.dbId === id);
+    } else {
+      let decoded: string;
+      try {
+        decoded = decodeURIComponent(fileFromUrl);
+      } catch {
+        return;
+      }
+      match = allFiles.find((f) => f.path === decoded);
     }
-    const match = allFiles.find((f) => f.path === decoded);
     if (!match) return;
     hasSetInitialTab.current = true;
     setSelectedFile(match);
@@ -354,16 +362,20 @@ export default function ProductDetailPage({ params }: { params: { name: string }
     }
   }, [selectedFile]);
 
-  const handleCopyFileLink = useCallback((filePath: string) => {
+  const handleCopyFileLink = useCallback((file: YandexDiskItem) => {
     try {
       const u = new URL(window.location.href);
-      u.searchParams.set('file', filePath);
+      const g = (productGroup || groupFromUrl || '').trim();
+      if (g) u.searchParams.set('group', groupSlugFromLabel(g));
+      else u.searchParams.delete('group');
+      if (file.dbId != null) u.searchParams.set('file', String(file.dbId));
+      else u.searchParams.set('file', file.path);
       void navigator.clipboard.writeText(u.toString());
       alert('Ссылка скопирована');
     } catch {
       alert('Не удалось скопировать ссылку');
     }
-  }, []);
+  }, [productGroup, groupFromUrl]);
 
   const handleSetMainPhoto = useCallback(async (file: YandexDiskItem) => {
     if (settingMainPhoto) return;
@@ -994,7 +1006,7 @@ export default function ProductDetailPage({ params }: { params: { name: string }
                           className="text-base text-black p-2 rounded-md hover:bg-gray-100 bg-transparent border-none cursor-pointer"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleCopyFileLink(file.path);
+                            handleCopyFileLink(file);
                           }}
                           title="Скопировать ссылку на этот файл"
                         >

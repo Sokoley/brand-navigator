@@ -1,7 +1,7 @@
 import { getPool, ensureSchema, executeWithRetry } from '@/lib/db';
 import { getAllFilesRecursive, getResource } from '@/lib/yandex-disk';
 import { parseProductFilePath } from '@/lib/product-paths';
-import { allocateSlugInGroup } from '@/lib/product-slug';
+import { allocateSlugInGroup, groupSlugFromLabel, matchesGroupQuery } from '@/lib/product-slug';
 import { addProductName, addSKU } from '@/lib/properties-manager';
 import { Product, YandexDiskItem, FileInfo } from '@/lib/types';
 
@@ -46,6 +46,7 @@ function fileRowToYandexItem(row: ProductFileRow): YandexDiskItem {
     name,
     type: 'file',
     path: row.path,
+    dbId: row.id,
     preview: row.preview_url || undefined,
     file: row.file_url || undefined,
     size: row.size ?? undefined,
@@ -74,16 +75,12 @@ export async function resolveProductBySlug(
   const s = slug.trim();
   if (!s) return null;
   const g = (group || '').trim();
-  if (g) {
-    const [rows] = await executeWithRetry(
-      'SELECT name, product_group FROM products WHERE slug = ? AND product_group = ? LIMIT 1',
-      [s, g],
-    );
-    const arr = (Array.isArray(rows) ? rows : []) as { name: string; product_group: string }[];
-    return arr[0] ?? null;
-  }
   const [rows] = await executeWithRetry('SELECT name, product_group FROM products WHERE slug = ?', [s]);
   const arr = (Array.isArray(rows) ? rows : []) as { name: string; product_group: string }[];
+  if (g) {
+    const row = arr.find((r) => matchesGroupQuery(g, r.product_group));
+    return row ?? null;
+  }
   if (arr.length === 0) return null;
   if (arr.length > 1) return null;
   return arr[0];
@@ -138,6 +135,7 @@ export async function getProducts(contentFilter: string = 'Товар'): Promise
       if (!slug && String(p.slug ?? '').trim()) slug = String(p.slug ?? '').trim();
       if (p.main_photo_path) mainPhotoPath = p.main_photo_path;
     }
+    const groupSlug = group ? groupSlugFromLabel(group) : '';
     const skus = [...new Set(allFiles.map((f) => f.sku).filter(Boolean))] as string[];
     addProductName(name);
     skus.forEach(addSKU);
@@ -173,6 +171,7 @@ export async function getProducts(contentFilter: string = 'Товар'): Promise
       name,
       slug,
       group,
+      groupSlug,
       skus,
       main_photo,
       photos,
@@ -192,24 +191,27 @@ export async function getProductFiles(productName: string, group?: string): Prom
   await ensureSchema();
 
   let productId: number;
+  const [nameRows] = await executeWithRetry(
+    'SELECT id, product_group FROM products WHERE name = ?',
+    [productName],
+  );
+  const byName = (Array.isArray(nameRows) ? nameRows : []) as { id: number; product_group: string }[];
+
   if (group !== undefined && group !== null && group !== '') {
-    const [rows] = await executeWithRetry(
-      'SELECT id FROM products WHERE name = ? AND product_group = ? LIMIT 1',
-      [productName, group]
-    );
-    const arr = (Array.isArray(rows) ? rows : []) as { id: number }[];
-    const r = arr[0];
-    if (!r) return [];
-    productId = r.id;
+    const row = byName.find((r) => matchesGroupQuery(group, r.product_group));
+    if (!row) return [];
+    productId = row.id;
   } else {
-    const [rows] = await executeWithRetry(
-      'SELECT id FROM products WHERE name = ? LIMIT 1',
-      [productName]
-    );
-    const arr = (Array.isArray(rows) ? rows : []) as { id: number }[];
-    const r = arr[0];
-    if (!r) return [];
-    productId = r.id;
+    if (byName.length === 0) return [];
+    if (byName.length > 1) {
+      const [rows] = await executeWithRetry('SELECT id FROM products WHERE name = ? LIMIT 1', [productName]);
+      const arr = (Array.isArray(rows) ? rows : []) as { id: number }[];
+      const r = arr[0];
+      if (!r) return [];
+      productId = r.id;
+    } else {
+      productId = byName[0].id;
+    }
   }
 
   const [fileRows] = await executeWithRetry(
@@ -457,6 +459,7 @@ function buildProductsFromFiles(items: YandexDiskItem[], contentFilter: string):
         name: productName,
         slug: '',
         group: productGroup,
+        groupSlug: productGroup ? groupSlugFromLabel(productGroup) : '',
         skus: [],
         main_photo: '',
         photos: [],
