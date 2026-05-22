@@ -1,54 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { uploadFileViaFTP } from '@/lib/ftp';
+import {
+  buildMapPoint,
+  fetchPoints,
+  savePointsToRemote,
+  type MapPoint,
+  type PointsCollection,
+} from '@/lib/points-data';
 
-const DATA_URL = 'https://smazka.ru/data_test.json';
-
-export interface MapPoint {
-  type: 'Feature';
-  id: number;
-  geometry: {
-    type: 'Point';
-    coordinates: [number, number];
-  };
-  properties: {
-    balloonContentHeader: string;
-    balloonContent: string;
-    balloonContentFooter: string;
-    hintContent: string;
-    adress: string;
-  };
-  options: {
-    preset: string;
-  };
-}
-
-export interface PointsCollection {
-  type: 'FeatureCollection';
-  features: MapPoint[];
-}
-
-// In-memory cache
-let cachedData: PointsCollection | null = null;
-
-async function fetchPoints(): Promise<PointsCollection> {
-  if (cachedData) {
-    return cachedData;
-  }
-
-  const response = await fetch(DATA_URL, { cache: 'no-store' });
-  if (!response.ok) {
-    throw new Error('Failed to fetch points data');
-  }
-
-  cachedData = await response.json();
-  return cachedData!;
-}
-
-// Save data to remote server via FTP
-async function savePointsToRemote(data: PointsCollection): Promise<void> {
-  const jsonContent = JSON.stringify(data, null, 2);
-  await uploadFileViaFTP(jsonContent);
-}
+export type { MapPoint, PointsCollection };
 
 // GET - Fetch all points
 export async function GET() {
@@ -67,33 +26,19 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const data = await fetchPoints();
 
-    // Generate new ID
     const maxId = Math.max(...data.features.map((f) => f.id), 0);
-    const newPoint: MapPoint = {
-      type: 'Feature',
-      id: maxId + 1,
-      geometry: {
-        type: 'Point',
-        coordinates: [body.latitude || 53.9, body.longitude || 27.5667],
-      },
-      properties: {
-        balloonContentHeader: body.name || '',
-        balloonContent: `Телефон: ${body.phone || 'нет'}<br>Email: ${body.email || 'нет'}<br>Сайт: ${
-          body.website ? `<a target='_blank' href='${body.website}'>${body.website}</a>` : 'нет'
-        }`,
-        balloonContentFooter: body.address || '',
-        hintContent: body.name || '',
-        adress: body.address || '',
-      },
-      options: {
-        preset: body.preset || 'islands#grayDotIcon',
-      },
-    };
+    const newPoint = buildMapPoint(maxId + 1, {
+      name: body.name || '',
+      address: body.address || '',
+      phone: body.phone,
+      email: body.email,
+      website: body.website,
+      latitude: body.latitude ?? 53.9,
+      longitude: body.longitude ?? 27.5667,
+      preset: body.preset,
+    });
 
     data.features.push(newPoint);
-    cachedData = data;
-
-    // Save to remote server
     await savePointsToRemote(data);
 
     return NextResponse.json({ success: true, point: newPoint });
@@ -122,7 +67,6 @@ export async function PATCH(request: NextRequest) {
 
     const point = data.features[pointIndex];
 
-    // Update coordinates
     if (updates.latitude !== undefined || updates.longitude !== undefined) {
       point.geometry.coordinates = [
         updates.latitude ?? point.geometry.coordinates[0],
@@ -130,7 +74,6 @@ export async function PATCH(request: NextRequest) {
       ];
     }
 
-    // Update properties
     if (updates.name !== undefined) {
       point.properties.balloonContentHeader = updates.name;
       point.properties.hintContent = updates.name;
@@ -141,17 +84,13 @@ export async function PATCH(request: NextRequest) {
       point.properties.adress = updates.address;
     }
 
-    // Update preset/point type
     if (updates.preset !== undefined) {
       point.options = point.options || { preset: 'islands#grayDotIcon' };
       point.options.preset = updates.preset;
     }
 
-    // Rebuild balloonContent if contact info changed
     if (updates.phone !== undefined || updates.email !== undefined || updates.website !== undefined) {
       const currentContent = point.properties.balloonContent;
-
-      // Parse current values
       const phoneMatch = currentContent.match(/Телефон: ([^<]*)/);
       const emailMatch = currentContent.match(/Email: ([^<]*)/);
       const websiteMatch = currentContent.match(/href='([^']+)'/);
@@ -166,9 +105,6 @@ export async function PATCH(request: NextRequest) {
     }
 
     data.features[pointIndex] = point;
-    cachedData = data;
-
-    // Save to remote server
     await savePointsToRemote(data);
 
     return NextResponse.json({ success: true, point });
@@ -196,9 +132,6 @@ export async function DELETE(request: NextRequest) {
     }
 
     data.features.splice(pointIndex, 1);
-    cachedData = data;
-
-    // Save to remote server
     await savePointsToRemote(data);
 
     return NextResponse.json({ success: true });

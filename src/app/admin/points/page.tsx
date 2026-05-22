@@ -129,14 +129,20 @@ export default function PointsAdminPage() {
       const data = await res.json();
 
       if (res.ok) {
-        // Refresh points list
-        const pointsRes = await fetch('/api/points');
-        const pointsData = await pointsRes.json();
-        setPoints(pointsData);
+        if (data.collection) {
+          setPoints(data.collection);
+        } else {
+          const pointsRes = await fetch('/api/points');
+          const pointsData = await pointsRes.json();
+          setPoints(pointsData);
+        }
 
+        const skipped = data.skipped ? `, пропущено ${data.skipped}` : '';
+        const errHint =
+          data.errors?.length > 0 ? ` (${data.errors.length} строк с ошибками)` : '';
         setNotification({
           type: 'success',
-          message: `Импортировано ${data.imported} из ${data.total} точек`,
+          message: `Импортировано ${data.imported} из ${data.total} точек${skipped}${errHint}`,
         });
       } else {
         setNotification({

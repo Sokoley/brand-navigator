@@ -12,6 +12,7 @@ const PROTECTED_ROUTES = [
   { path: '/api/admin/delete-product-fotos', methods: ['POST'] },
   { path: '/api/properties', methods: ['POST', 'PATCH', 'DELETE'] },
   { path: '/api/points', methods: ['POST', 'PATCH', 'DELETE'] },
+  { path: '/api/points/upload', methods: ['POST'] },
 ];
 
 export async function middleware(request: NextRequest) {
