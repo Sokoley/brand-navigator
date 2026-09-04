@@ -23,7 +23,6 @@ export default function ProductsPage() {
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [categories, setCategories] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('');
-  const [uploadCategory, setUploadCategory] = useState('');
   const [maketsRefresh, setMaketsRefresh] = useState(0);
 
   const groups = Array.from(new Set(products.map((p) => p.group).filter(Boolean))).sort((a, b) => a.localeCompare(b));
@@ -136,10 +135,7 @@ export default function ProductsPage() {
         <div className="flex flex-wrap gap-2 md:gap-3 mb-6">
           <button
             type="button"
-            onClick={() => {
-              setSelectedCategory('');
-              setUploadCategory('');
-            }}
+            onClick={() => setSelectedCategory('')}
             className={chipClass(showProducts)}
           >
             Товары
@@ -166,15 +162,7 @@ export default function ProductsPage() {
               <button
                 key={cat}
                 type="button"
-                onClick={() => {
-                  if (isActive) {
-                    setSelectedCategory('');
-                    setUploadCategory('');
-                    return;
-                  }
-                  setSelectedCategory(cat);
-                  if (isAuth) setUploadCategory(cat);
-                }}
+                onClick={() => setSelectedCategory(isActive ? '' : cat)}
                 className={chipClass(isActive)}
               >
                 {cat}
@@ -212,7 +200,16 @@ export default function ProductsPage() {
         )}
 
         {selectedCategory && (
-          <MaketsBrowser key={`${selectedCategory}-${maketsRefresh}`} selectedCategory={selectedCategory} />
+          <>
+            {isAuth && (
+              <CategoryUploadModal
+                key={selectedCategory}
+                category={selectedCategory}
+                onUploaded={() => setMaketsRefresh((k) => k + 1)}
+              />
+            )}
+            <MaketsBrowser key={`${selectedCategory}-${maketsRefresh}`} selectedCategory={selectedCategory} />
+          </>
         )}
 
         {showProducts && (
@@ -262,14 +259,6 @@ export default function ProductsPage() {
           </>
         )}
       </div>
-
-      {isAuth && uploadCategory && (
-        <CategoryUploadModal
-          category={uploadCategory}
-          onClose={() => setUploadCategory('')}
-          onUploaded={() => setMaketsRefresh((k) => k + 1)}
-        />
-      )}
 
       <ConfirmDialog
         open={!!deleteTarget}
