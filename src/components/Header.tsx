@@ -24,13 +24,8 @@ export default function Header() {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-1">
-            {isAuth && (
-              <Link href="/products#makets" className="text-black px-4 py-2 no-underline font-medium text-sm lg:text-base lg:px-5 lg:py-2.5">
-                Все макеты
-              </Link>
-            )}
             <Link href="/products" className="text-black px-4 py-2 no-underline font-medium text-sm lg:text-base lg:px-5 lg:py-2.5">
-              Все товары
+              Медиаматериалы
             </Link>
             {isAuth && (
               <>
@@ -90,21 +85,12 @@ export default function Header() {
         {menuOpen && (
           <div className="md:hidden bg-white border-t border-gray-200 px-4 py-4">
             <div className="flex flex-col gap-2">
-              {isAuth && (
-                <Link
-                  href="/products#makets"
-                  className="text-black px-4 py-3 no-underline font-medium rounded-lg hover:bg-gray-100"
-                  onClick={() => setMenuOpen(false)}
-                >
-                  Все макеты
-                </Link>
-              )}
               <Link
                 href="/products"
                 className="text-black px-4 py-3 no-underline font-medium rounded-lg hover:bg-gray-100"
                 onClick={() => setMenuOpen(false)}
               >
-                Все товары
+                Медиаматериалы
               </Link>
               {isAuth && (
                 <>

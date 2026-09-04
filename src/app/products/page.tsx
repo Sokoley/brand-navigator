@@ -113,10 +113,16 @@ export default function ProductsPage() {
     setDeleteTarget(null);
   };
 
+  const showProducts = !selectedCategory;
+  const chipClass = (isActive: boolean) =>
+    `px-5 py-2 rounded-2xl font-medium border-none cursor-pointer transition-colors ${
+      isActive ? 'bg-[#ff0000] text-white' : 'bg-[#edebeb] text-dark hover:bg-[#ff0000] hover:text-white'
+    }`;
+
   return (
     <>
       <div className="block mx-auto mt-20 md:mt-[140px] mb-8 md:mb-[50px] text-2xl sm:text-4xl md:text-[55px] font-bold text-center px-4">
-        Все товары
+        Медиаматериалы
       </div>
 
       <div className="max-w-[1440px] mx-auto px-4 md:px-8">
@@ -124,6 +130,46 @@ export default function ProductsPage() {
           <Alert type={alert.type} message={alert.message} />
         )}
 
+        <div className="flex flex-wrap gap-2 md:gap-3 mb-6">
+          <button
+            type="button"
+            onClick={() => setSelectedCategory('')}
+            className={chipClass(showProducts)}
+          >
+            Товары
+          </button>
+          <a
+            href="https://disk.yandex.ru/d/Gibn8WMao0CGmA"
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`${chipClass(false)} no-underline`}
+          >
+            Логотипы
+          </a>
+          <a
+            href="https://smazka.ru/catalog-2025/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`${chipClass(false)} no-underline`}
+          >
+            Каталог
+          </a>
+          {categories.map((cat) => {
+            const isActive = selectedCategory === cat;
+            return (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setSelectedCategory(isActive ? '' : cat)}
+                className={chipClass(isActive)}
+              >
+                {cat}
+              </button>
+            );
+          })}
+        </div>
+
+        {showProducts && (
         <div className="mb-4">
           <input
             type="text"
@@ -133,8 +179,9 @@ export default function ProductsPage() {
             className="w-full px-4 md:px-5 py-3 md:py-4 border-2 border-border rounded-[25px] text-base md:text-lg outline-none transition-all focus:border-primary focus:shadow-[0_0_0_3px_rgba(157,161,168,0.1)]"
           />
         </div>
+        )}
 
-        {groups.length > 0 && (
+        {showProducts && groups.length > 0 && (
           <div className="mb-4">
             <span className="text-sm text-gray-600 mr-2">Группа:</span>
             <select
@@ -150,85 +197,53 @@ export default function ProductsPage() {
           </div>
         )}
 
-        <div className="flex flex-wrap gap-3 mb-6">
-          <a
-            href="https://disk.yandex.ru/d/Gibn8WMao0CGmA"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-5 py-2 bg-transparent border-2 border-[#007bff] text-[#007bff] rounded-lg font-medium hover:bg-[#007bff] hover:text-white transition-colors"
-          >
-            Логотипы
-          </a>
-          <a
-            href="https://smazka.ru/catalog-2025/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-5 py-2 bg-transparent border-2 border-[#28a745] text-[#28a745] rounded-lg font-medium hover:bg-[#28a745] hover:text-white transition-colors"
-          >
-            Каталог
-          </a>
-          {categories.map((cat) => {
-            const isActive = selectedCategory === cat;
-            return (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setSelectedCategory(isActive ? '' : cat)}
-                className={`px-5 py-2 rounded-lg font-medium border-2 transition-colors cursor-pointer ${
-                  isActive
-                    ? 'bg-[#ff0000] text-white border-[#ff0000]'
-                    : 'bg-transparent border-gray-400 text-gray-800 hover:bg-gray-100'
-                }`}
-              >
-                {cat}
-              </button>
-            );
-          })}
-        </div>
+        {selectedCategory && <MaketsBrowser selectedCategory={selectedCategory} />}
 
-        <MaketsBrowser selectedCategory={selectedCategory} />
+        {showProducts && (
+          <>
+            <div className="flex flex-wrap justify-between items-center gap-2 mb-5">
+              <div className="text-sm text-gray-500">
+                Найдено: {filteredProducts.length} товаров
+              </div>
+              <div className="flex gap-2">
+                {isAuth && (
+                  <button
+                    onClick={handleReindex}
+                    disabled={reindexing}
+                    className="px-4 py-2 bg-gray-700 text-white rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50 border-none cursor-pointer"
+                  >
+                    {reindexing ? 'Переиндексация…' : 'Переиндексировать из Yandex'}
+                  </button>
+                )}
+                <button
+                  onClick={() => loadProducts(true)}
+                  className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-dark transition-colors border-none cursor-pointer"
+                >
+                  Обновить
+                </button>
+              </div>
+            </div>
 
-        <div className="flex flex-wrap justify-between items-center gap-2 mb-5">
-          <div className="text-sm text-gray-500">
-            Найдено: {filteredProducts.length} товаров
-          </div>
-          <div className="flex gap-2">
-            {isAuth && (
-              <button
-                onClick={handleReindex}
-                disabled={reindexing}
-                className="px-4 py-2 bg-gray-700 text-white rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50 border-none cursor-pointer"
-              >
-                {reindexing ? 'Переиндексация…' : 'Переиндексировать из Yandex'}
-              </button>
+            {loading ? (
+              <div className="text-center text-gray-500 py-20">Загрузка...</div>
+            ) : filteredProducts.length === 0 ? (
+              <div className="text-center py-16 text-gray-500">
+                <h3 className="text-dark mb-2">Товары не найдены</h3>
+                <p className="text-sm">Попробуйте изменить поисковый запрос</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4 md:gap-5">
+                {filteredProducts.map((product) => (
+                  <ProductCard
+                    key={product.name}
+                    product={product}
+                    searchQuery={searchQuery}
+                    onDelete={isAuth ? (name) => setDeleteTarget(name) : undefined}
+                  />
+                ))}
+              </div>
             )}
-            <button
-              onClick={() => loadProducts(true)}
-              className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-dark transition-colors border-none cursor-pointer"
-            >
-              Обновить
-            </button>
-          </div>
-        </div>
-
-        {loading ? (
-          <div className="text-center text-gray-500 py-20">Загрузка...</div>
-        ) : filteredProducts.length === 0 ? (
-          <div className="text-center py-16 text-gray-500">
-            <h3 className="text-dark mb-2">Товары не найдены</h3>
-            <p className="text-sm">Попробуйте изменить поисковый запрос</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4 md:gap-5">
-            {filteredProducts.map((product) => (
-              <ProductCard
-                key={product.name}
-                product={product}
-                searchQuery={searchQuery}
-                onDelete={isAuth ? (name) => setDeleteTarget(name) : undefined}
-              />
-            ))}
-          </div>
+          </>
         )}
       </div>
 
