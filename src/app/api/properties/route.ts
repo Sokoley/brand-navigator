@@ -4,10 +4,9 @@ import {
   addPropertyValue,
   updatePropertyValue,
   deletePropertyValue,
-  hasSubcategories,
   getSubcategoriesForCategory
 } from '@/lib/properties-manager';
-import { checkPropertyUsage, updatePropertyInFiles } from '@/lib/property-validator';
+import { checkPropertyUsage, updatePropertyInFiles, deleteFilesByCategory } from '@/lib/property-validator';
 
 export async function GET() {
   const properties = loadProperties();
@@ -62,6 +61,24 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
   }
 
+  if (propertyType === 'Категория') {
+    const subcats = getSubcategoriesForCategory(value);
+    const success = deletePropertyValue(propertyType, value);
+
+    if (!success) {
+      return NextResponse.json({ error: 'Delete failed' }, { status: 500 });
+    }
+
+    const filesResult = await deleteFilesByCategory(value);
+
+    return NextResponse.json({
+      success: true,
+      subcategoriesRemoved: subcats,
+      filesDeleted: filesResult.deletedCount,
+      fileErrors: filesResult.errors,
+    });
+  }
+
   // Check usage before deletion (unless forced)
   if (!force) {
     const usage = await checkPropertyUsage(propertyType, value);
@@ -72,15 +89,6 @@ export async function DELETE(request: Request) {
         fileNames: usage.fileNames
       }, { status: 409 });
     }
-  }
-
-  // Special check for categories: prevent deletion if has subcategories
-  if (propertyType === 'Категория' && hasSubcategories(value)) {
-    const subcats = getSubcategoriesForCategory(value);
-    return NextResponse.json({
-      error: 'Cannot delete category with subcategories',
-      subcategories: subcats
-    }, { status: 409 });
   }
 
   const success = deletePropertyValue(propertyType, value, parent || undefined);

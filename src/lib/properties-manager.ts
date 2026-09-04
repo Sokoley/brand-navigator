@@ -151,6 +151,11 @@ export function deletePropertyValue(
       return false;
     }
     arr.splice(index, 1);
+
+    if (propertyType === 'Категория') {
+      const subcats = properties['Подкатегория'] as Record<string, string[]>;
+      delete subcats[value];
+    }
   }
 
   saveProperties(properties);

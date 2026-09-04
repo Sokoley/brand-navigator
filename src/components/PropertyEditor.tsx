@@ -52,7 +52,11 @@ export default function PropertyEditor({
   };
 
   const handleDelete = async (value: string) => {
-    const confirmed = confirm(`Удалить значение "${value}"?`);
+    const confirmed = confirm(
+      propertyType === 'Категория'
+        ? `Удалить категорию «${value}»? Будут удалены все её подкатегории и макеты.`
+        : `Удалить значение "${value}"?`
+    );
     if (!confirmed) return;
 
     setLoading(true);

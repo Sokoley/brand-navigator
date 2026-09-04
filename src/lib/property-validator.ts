@@ -1,4 +1,7 @@
-import { getAllFilesRecursive, setCustomProperties } from './yandex-disk';
+import { getAllFilesRecursive, setCustomProperties, deleteResource } from './yandex-disk';
+import { PRODUCTS_ROOT, isUnderProductsRoot } from './product-paths';
+import { afterDeleteFile } from '@/services/product-index.service';
+import { isDbConfigured } from './db';
 
 export async function checkPropertyUsage(
   propertyType: string,
@@ -92,4 +95,38 @@ export async function updatePropertyInFiles(
       errors: ['System error occurred'],
     };
   }
+}
+
+/** Удаляет макеты с указанной категорией (не трогает каталог товаров). */
+export async function deleteFilesByCategory(
+  category: string
+): Promise<{ deletedCount: number; errors: string[] }> {
+  const files = await getAllFilesRecursive('disk:/Brand', 'XXXL', undefined, {
+    skipDirNames: [PRODUCTS_ROOT],
+  });
+  let deletedCount = 0;
+  const errors: string[] = [];
+
+  for (const file of files) {
+    if (file.type !== 'file') continue;
+    if (isUnderProductsRoot(file.path)) continue;
+    const cat = (file.custom_properties?.['Категория'] || '').trim();
+    if (cat !== category) continue;
+
+    const result = await deleteResource(file.path);
+    if (result.code === 204 || result.code === 202) {
+      deletedCount++;
+      if (isDbConfigured()) {
+        try {
+          await afterDeleteFile(file.path);
+        } catch {
+          /* index update best-effort */
+        }
+      }
+    } else {
+      errors.push(file.name);
+    }
+  }
+
+  return { deletedCount, errors };
 }

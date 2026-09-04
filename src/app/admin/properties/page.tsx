@@ -114,37 +114,39 @@ export default function PropertiesAdminPage() {
 
       if (res.status === 409) {
         const data = await res.json();
-        if (data.subcategories) {
-          alert(
-            `Категория имеет подкатегории: ${data.subcategories.join(', ')}. Удалите их сначала.`
-          );
-          return false;
-        } else {
-          const confirmed = confirm(
-            `Значение используется в ${data.fileCount} файлах:\n${data.fileNames.slice(0, 5).join('\n')}${
-              data.fileCount > 5 ? '\n...' : ''
-            }\n\nПродолжить удаление?`
-          );
+        const confirmed = confirm(
+          `Значение используется в ${data.fileCount} файлах:\n${data.fileNames.slice(0, 5).join('\n')}${
+            data.fileCount > 5 ? '\n...' : ''
+          }\n\nПродолжить удаление?`
+        );
 
-          if (confirmed) {
-            params.append('force', 'true');
-            const forceRes = await fetch(`/api/properties?${params}`, {
-              method: 'DELETE',
-            });
+        if (confirmed) {
+          params.append('force', 'true');
+          const forceRes = await fetch(`/api/properties?${params}`, {
+            method: 'DELETE',
+          });
 
-            if (forceRes.ok) {
-              setNotification({ type: 'success', message: 'Значение удалено' });
-              refresh();
-              return true;
-            } else {
-              setNotification({ type: 'error', message: 'Ошибка удаления' });
-              return false;
-            }
+          if (forceRes.ok) {
+            setNotification({ type: 'success', message: 'Значение удалено' });
+            refresh();
+            return true;
+          } else {
+            setNotification({ type: 'error', message: 'Ошибка удаления' });
+            return false;
           }
-          return false;
         }
+        return false;
       } else if (res.ok) {
-        setNotification({ type: 'success', message: 'Значение удалено' });
+        const data = await res.json();
+        let message = 'Значение удалено';
+        if (typeof data.filesDeleted === 'number') {
+          const subCount = Array.isArray(data.subcategoriesRemoved) ? data.subcategoriesRemoved.length : 0;
+          message = `Категория удалена. Подкатегорий: ${subCount}, макетов: ${data.filesDeleted}`;
+          if (Array.isArray(data.fileErrors) && data.fileErrors.length > 0) {
+            message += `. Ошибки: ${data.fileErrors.length}`;
+          }
+        }
+        setNotification({ type: 'success', message });
         refresh();
         return true;
       } else {
