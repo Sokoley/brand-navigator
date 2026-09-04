@@ -25,7 +25,7 @@ export default function Header() {
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-1">
             {isAuth && (
-              <Link href="/all-files" className="text-black px-4 py-2 no-underline font-medium text-sm lg:text-base lg:px-5 lg:py-2.5">
+              <Link href="/products#makets" className="text-black px-4 py-2 no-underline font-medium text-sm lg:text-base lg:px-5 lg:py-2.5">
                 Все макеты
               </Link>
             )}
@@ -92,7 +92,7 @@ export default function Header() {
             <div className="flex flex-col gap-2">
               {isAuth && (
                 <Link
-                  href="/all-files"
+                  href="/products#makets"
                   className="text-black px-4 py-3 no-underline font-medium rounded-lg hover:bg-gray-100"
                   onClick={() => setMenuOpen(false)}
                 >

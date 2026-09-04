@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { Product } from '@/lib/types';
 import { advancedSearch } from '@/lib/search';
 import { postReindexAndPoll } from '@/lib/admin-reindex-client';
@@ -8,6 +8,7 @@ import { useAuth } from '@/components/AuthProvider';
 import ProductCard from '@/components/ProductCard';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import Alert from '@/components/Alert';
+import MaketsBrowser from '@/components/MaketsBrowser';
 
 export default function ProductsPage() {
   const { isAuth } = useAuth();
@@ -153,6 +154,10 @@ export default function ProductsPage() {
             Каталог
           </a>
         </div>
+
+        <Suspense fallback={<div className="text-center text-gray-500 py-10">Загрузка макетов...</div>}>
+          <MaketsBrowser />
+        </Suspense>
 
         <div className="flex flex-wrap justify-between items-center gap-2 mb-5">
           <div className="text-sm text-gray-500">
