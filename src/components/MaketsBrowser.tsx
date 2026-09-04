@@ -1,33 +1,21 @@
 'use client';
 
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { CustomProperties, YandexDiskItem } from '@/lib/types';
+import { YandexDiskItem } from '@/lib/types';
 import { useAuth } from '@/components/AuthProvider';
-import FilterCloud from '@/components/FilterCloud';
 import FileList from '@/components/FileList';
 import FilePreview from '@/components/FilePreview';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import Alert from '@/components/Alert';
 import UploadProgress from '@/components/UploadProgress';
-import { useSearchParams } from 'next/navigation';
 import { uploadFilesWithProgress } from '@/lib/upload-files';
 import { isUnderProductsRoot } from '@/lib/product-paths';
 
-export default function MaketsBrowser() {
+export default function MaketsBrowser({ selectedCategory = '' }: { selectedCategory?: string }) {
   const { isAuth } = useAuth();
-  const searchParams = useSearchParams();
   const [allFiles, setAllFiles] = useState<YandexDiskItem[]>([]);
-  const [filteredFiles, setFilteredFiles] = useState<YandexDiskItem[]>([]);
   const [selectedFile, setSelectedFile] = useState<YandexDiskItem | null>(null);
   const [loading, setLoading] = useState(true);
-  const [propertyCategories, setPropertyCategories] = useState<string[]>([]);
-  const [propertySubcategories, setPropertySubcategories] = useState<Record<string, string[]>>({});
-
-  const [filterCategory, setFilterCategory] = useState<string[]>([]);
-  const [filterSubcategory, setFilterSubcategory] = useState<string[]>([]);
-  const [filterResponsible, setFilterResponsible] = useState<string[]>([]);
-  const [filterProductGroup, setFilterProductGroup] = useState<string[]>([]);
-
   const [deleteTarget, setDeleteTarget] = useState<{ path: string; name: string } | null>(null);
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
@@ -35,26 +23,6 @@ export default function MaketsBrowser() {
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
   const [currentUploadFolder, setCurrentUploadFolder] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    const cat = searchParams.get('category');
-    const sub = searchParams.get('subcategory');
-    if (cat) setFilterCategory([cat]);
-    if (sub) setFilterSubcategory([sub]);
-  }, [searchParams]);
-
-  useEffect(() => {
-    fetch('/api/properties')
-      .then((r) => (r.ok ? r.json() : {}))
-      .then((data: CustomProperties) => {
-        setPropertyCategories((data['Категория'] as string[]) || []);
-        setPropertySubcategories((data['Подкатегория'] as Record<string, string[]>) || {});
-      })
-      .catch(() => {
-        setPropertyCategories([]);
-        setPropertySubcategories({});
-      });
-  }, []);
 
   const loadFiles = () => {
     setLoading(true);
@@ -99,150 +67,18 @@ export default function MaketsBrowser() {
     loadFiles();
   }, []);
 
-  useEffect(() => {
-    if (filterCategory.length === 0 && filterSubcategory.length > 0) {
-      setFilterSubcategory([]);
-    }
-  }, [filterCategory, filterSubcategory.length]);
-
-  const maketFiles = useMemo(() => {
+  const filteredFiles = useMemo(() => {
     return allFiles.filter((f) => {
       const ct = f.custom_properties?.['Тип контента'] || '';
       if (!(ct === 'Макет' || ct === '')) return false;
-      return !isUnderProductsRoot(f.path);
-    });
-  }, [allFiles]);
-
-  const categoriesWithFiles = useMemo(() => {
-    const s = new Set<string>();
-    for (const f of maketFiles) {
-      const v = (f.custom_properties?.['Категория'] || '').trim();
-      if (v) s.add(v);
-    }
-    return [...s].sort((a, b) => a.localeCompare(b, 'ru'));
-  }, [maketFiles]);
-
-  const categoryValues = propertyCategories.length > 0 ? propertyCategories : categoriesWithFiles;
-
-  const subcategoriesWithFiles = useMemo(() => {
-    if (filterCategory.length === 0) return [];
-    const cat = filterCategory[0];
-    const s = new Set<string>();
-    for (const f of maketFiles) {
-      if ((f.custom_properties?.['Категория'] || '').trim() !== cat) continue;
-      const v = (f.custom_properties?.['Подкатегория'] || '').trim();
-      if (v) s.add(v);
-    }
-    const fromProps = propertySubcategories[cat] || [];
-    for (const v of fromProps) {
-      if (v) s.add(v);
-    }
-    return [...s].sort((a, b) => a.localeCompare(b, 'ru'));
-  }, [maketFiles, filterCategory, propertySubcategories]);
-
-  const filesAfterCategorySub = useMemo(() => {
-    let list = maketFiles;
-    if (filterCategory.length > 0) {
-      const c = filterCategory[0];
-      list = list.filter((f) => (f.custom_properties?.['Категория'] || '').trim() === c);
-    }
-    if (filterSubcategory.length > 0) {
-      const sub = filterSubcategory[0];
-      list = list.filter((f) => (f.custom_properties?.['Подкатегория'] || '').trim() === sub);
-    }
-    return list;
-  }, [maketFiles, filterCategory, filterSubcategory]);
-
-  const responsibleWithFiles = useMemo(() => {
-    const s = new Set<string>();
-    for (const f of filesAfterCategorySub) {
-      const v = (f.custom_properties?.['Ответственный'] || '').trim();
-      if (v) s.add(v);
-    }
-    return [...s].sort((a, b) => a.localeCompare(b, 'ru'));
-  }, [filesAfterCategorySub]);
-
-  const filesAfterResponsible = useMemo(() => {
-    let list = filesAfterCategorySub;
-    if (filterResponsible.length > 0) {
-      const r = filterResponsible[0];
-      list = list.filter((f) => (f.custom_properties?.['Ответственный'] || '').trim() === r);
-    }
-    return list;
-  }, [filesAfterCategorySub, filterResponsible]);
-
-  const productGroupsWithFiles = useMemo(() => {
-    const s = new Set<string>();
-    for (const f of filesAfterResponsible) {
-      const v = (f.custom_properties?.['Группа товаров'] || '').trim();
-      if (v) s.add(v);
-    }
-    return [...s].sort((a, b) => a.localeCompare(b, 'ru'));
-  }, [filesAfterResponsible]);
-
-  useEffect(() => {
-    if (loading) return;
-    if (filterSubcategory.length > 0 && filterCategory.length > 0) {
-      if (!subcategoriesWithFiles.includes(filterSubcategory[0])) {
-        setFilterSubcategory([]);
-      }
-    }
-  }, [loading, subcategoriesWithFiles, filterSubcategory, filterCategory]);
-
-  useEffect(() => {
-    if (loading) return;
-    if (filterResponsible.length > 0 && !responsibleWithFiles.includes(filterResponsible[0])) {
-      setFilterResponsible([]);
-    }
-  }, [loading, responsibleWithFiles, filterResponsible]);
-
-  useEffect(() => {
-    if (loading) return;
-    if (filterProductGroup.length > 0 && !productGroupsWithFiles.includes(filterProductGroup[0])) {
-      setFilterProductGroup([]);
-    }
-  }, [loading, productGroupsWithFiles, filterProductGroup]);
-
-  useEffect(() => {
-    let filtered = allFiles;
-
-    filtered = filtered.filter((f) => {
-      const ct = f.custom_properties?.['Тип контента'] || '';
-      return ct === 'Макет' || ct === '';
-    });
-
-    filtered = filtered.filter((f) => !isUnderProductsRoot(f.path));
-
-    if (filterCategory.length > 0) {
-      filtered = filtered.filter((f) => {
+      if (isUnderProductsRoot(f.path)) return false;
+      if (selectedCategory) {
         const cat = (f.custom_properties?.['Категория'] || '').trim();
-        return filterCategory.includes(cat);
-      });
-    }
-
-    if (filterSubcategory.length > 0) {
-      filtered = filtered.filter((f) => {
-        const sub = (f.custom_properties?.['Подкатегория'] || '').trim();
-        return filterSubcategory.includes(sub);
-      });
-    }
-
-    if (filterResponsible.length > 0) {
-      filtered = filtered.filter((f) => {
-        const resp = (f.custom_properties?.['Ответственный'] || '').trim();
-        return filterResponsible.includes(resp);
-      });
-    }
-
-    if (filterProductGroup.length > 0) {
-      filtered = filtered.filter((f) => {
-        const pg = (f.custom_properties?.['Группа товаров'] || '').trim();
-        return filterProductGroup.includes(pg);
-      });
-    }
-
-    setFilteredFiles(filtered);
-  }, [allFiles, filterCategory, filterSubcategory, filterResponsible, filterProductGroup]);
+        if (cat !== selectedCategory) return false;
+      }
+      return true;
+    });
+  }, [allFiles, selectedCategory]);
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -353,41 +189,6 @@ export default function MaketsBrowser() {
       />
 
       {alert && <Alert type={alert.type} message={alert.message} />}
-
-      <div className="mb-6">
-        <FilterCloud
-          title="Категория"
-          values={categoryValues}
-          selectedValues={filterCategory}
-          onChange={setFilterCategory}
-          singleSelect
-        />
-        {filterCategory.length > 0 && subcategoriesWithFiles.length > 0 && (
-          <FilterCloud
-            title="Подкатегория"
-            values={subcategoriesWithFiles}
-            selectedValues={filterSubcategory}
-            onChange={setFilterSubcategory}
-            singleSelect
-          />
-        )}
-        {isAuth && (
-          <FilterCloud
-            title="Ответственный"
-            values={responsibleWithFiles}
-            selectedValues={filterResponsible}
-            onChange={setFilterResponsible}
-            singleSelect
-          />
-        )}
-        <FilterCloud
-          title="Группа товаров"
-          values={productGroupsWithFiles}
-          selectedValues={filterProductGroup}
-          onChange={setFilterProductGroup}
-          singleSelect
-        />
-      </div>
 
       {loading ? (
         <div className="text-center text-gray-500 py-10">Загрузка макетов...</div>

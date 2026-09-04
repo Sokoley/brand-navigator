@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
-import { Product } from '@/lib/types';
+import { useState, useEffect } from 'react';
+import { CustomProperties, Product } from '@/lib/types';
 import { advancedSearch } from '@/lib/search';
 import { postReindexAndPoll } from '@/lib/admin-reindex-client';
 import { useAuth } from '@/components/AuthProvider';
@@ -20,6 +20,8 @@ export default function ProductsPage() {
   const [reindexing, setReindexing] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState('');
 
   const groups = Array.from(new Set(products.map((p) => p.group).filter(Boolean))).sort((a, b) => a.localeCompare(b));
 
@@ -50,6 +52,18 @@ export default function ProductsPage() {
 
   useEffect(() => {
     loadProducts();
+  }, []);
+
+  useEffect(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get('category');
+    if (fromUrl) setSelectedCategory(fromUrl);
+
+    fetch('/api/properties')
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((data: CustomProperties) => {
+        setCategories((data['Категория'] as string[]) || []);
+      })
+      .catch(() => setCategories([]));
   }, []);
 
   useEffect(() => {
@@ -153,11 +167,26 @@ export default function ProductsPage() {
           >
             Каталог
           </a>
+          {categories.map((cat) => {
+            const isActive = selectedCategory === cat;
+            return (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setSelectedCategory(isActive ? '' : cat)}
+                className={`px-5 py-2 rounded-lg font-medium border-2 transition-colors cursor-pointer ${
+                  isActive
+                    ? 'bg-[#ff0000] text-white border-[#ff0000]'
+                    : 'bg-transparent border-gray-400 text-gray-800 hover:bg-gray-100'
+                }`}
+              >
+                {cat}
+              </button>
+            );
+          })}
         </div>
 
-        <Suspense fallback={<div className="text-center text-gray-500 py-10">Загрузка макетов...</div>}>
-          <MaketsBrowser />
-        </Suspense>
+        <MaketsBrowser selectedCategory={selectedCategory} />
 
         <div className="flex flex-wrap justify-between items-center gap-2 mb-5">
           <div className="text-sm text-gray-500">
