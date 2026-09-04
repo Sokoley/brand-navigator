@@ -132,43 +132,51 @@ export default function ProductsPage() {
           <Alert type={alert.type} message={alert.message} />
         )}
 
-        <div className="flex flex-wrap gap-2 md:gap-3 mb-6">
-          <button
-            type="button"
-            onClick={() => setSelectedCategory('')}
-            className={chipClass(showProducts)}
-          >
-            Товары
-          </button>
-          <a
-            href="https://disk.yandex.ru/d/Gibn8WMao0CGmA"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`${chipClass(false)} no-underline`}
-          >
-            Логотипы
-          </a>
-          <a
-            href="https://smazka.ru/catalog-2025/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`${chipClass(false)} no-underline`}
-          >
-            Каталог
-          </a>
-          {categories.map((cat) => {
-            const isActive = selectedCategory === cat;
-            return (
-              <button
-                key={cat}
-                type="button"
-                onClick={() => setSelectedCategory(isActive ? '' : cat)}
-                className={chipClass(isActive)}
-              >
-                {cat}
-              </button>
-            );
-          })}
+        <div className="flex flex-col gap-2 md:gap-3 mb-6">
+          <div>
+            <button
+              type="button"
+              onClick={() => setSelectedCategory('')}
+              className={chipClass(showProducts)}
+            >
+              Товары
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2 md:gap-3">
+            <a
+              href="https://disk.yandex.ru/d/Gibn8WMao0CGmA"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`${chipClass(false)} no-underline`}
+            >
+              Логотипы
+            </a>
+            <a
+              href="https://smazka.ru/catalog-2025/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`${chipClass(false)} no-underline`}
+            >
+              Каталог
+            </a>
+          </div>
+          {categories.length > 0 && (
+            <div className="flex flex-wrap gap-2 md:gap-3">
+              {categories.map((cat) => {
+                const isActive = selectedCategory === cat;
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setSelectedCategory(isActive ? '' : cat)}
+                    className={chipClass(isActive)}
+                  >
+                    {cat}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {showProducts && (
